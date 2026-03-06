@@ -98,7 +98,7 @@ export async function GET() {
     list.push({
       tipo: item.tipo_documento ?? item.tipo ?? "Documento",
       nombre: item.nombre_archivo ?? item.nombre ?? "Archivo",
-      url: item.url_publica ?? item.url ?? item.path ?? ""
+      url: item.file_url ?? item.url_publica ?? item.url ?? item.path ?? ""
     });
     documentosMap.set(item.postulacion_id, list);
   }
