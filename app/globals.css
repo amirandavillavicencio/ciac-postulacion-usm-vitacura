@@ -36,3 +36,21 @@ body {
 .section-title {
   @apply text-xl font-bold text-ciac-navy;
 }
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    background: white;
+  }
+}
+
+.print-only {
+  display: none;
+}

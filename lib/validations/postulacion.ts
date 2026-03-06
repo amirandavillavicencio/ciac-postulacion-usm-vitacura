@@ -9,11 +9,15 @@ const validDias = new Set(DIAS_SEMANA.map((dia) => dia.value));
 const validBloques: Set<number> = new Set(BLOQUES.map((bloque) => bloque.value));
 const validTipos = new Set(["academico", "administrativo"]);
 const validAreas = new Set([
-  "matematica",
-  "fisica_1_2",
+  "matematicas_i",
+  "matematicas_ii",
+  "matematicas_iii",
+  "matematicas_iv",
+  "fisica_i",
+  "fisica_ii",
   "fisica_120",
-  "programacion",
   "quimica",
+  "programacion",
   "administrativo"
 ]);
 
@@ -46,7 +50,8 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
     semestre: toNumber(raw.semestre) ?? 0,
     tipoPostulacion: toString(raw.tipoPostulacion) as PostulacionPayload["tipoPostulacion"],
     area: toString(raw.area) as PostulacionPayload["area"],
-    notaAsignatura: toNumber(raw.notaAsignatura) ?? 0,
+    notaAsignatura: raw.notaAsignatura === null ? null : toNumber(raw.notaAsignatura),
+    experienciaTutorias: Boolean(raw.experienciaTutorias),
     experiencia: toString(raw.experiencia),
     motivacion: toString(raw.motivacion),
     disponibilidad: Array.isArray(raw.disponibilidad)
@@ -66,7 +71,26 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
             diaSemana: item.diaSemana as PostulacionPayload["disponibilidad"][number]["diaSemana"],
             bloque: item.bloque
           }))
-      : []
+      : [],
+    documentos: Array.isArray(raw.documentos)
+      ? raw.documentos
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const value = item as Record<string, unknown>;
+            return {
+              tipo: toString(value.tipo),
+              nombre: toString(value.nombre),
+              mimeType: toString(value.mimeType),
+              size: toNumber(value.size) ?? 0,
+              contentBase64: toString(value.contentBase64)
+            };
+          })
+          .filter(
+            (item): item is PostulacionPayload["documentos"][number] =>
+              Boolean(item && item.tipo && item.nombre && item.contentBase64)
+          )
+      : [],
+    declaracionAceptada: Boolean(raw.declaracionAceptada)
   };
 
   if (!data.nombreCompleto || !data.rut || !data.correo || !data.telefono || !data.carrera || !data.motivacion) {
@@ -78,11 +102,23 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
   }
 
   if (!validAreas.has(data.area)) {
-    return { success: false, error: "Área de postulación inválida." };
+    return { success: false, error: "Asignatura/área de postulación inválida." };
   }
 
   if (data.semestre < 1 || data.semestre > 12) {
     return { success: false, error: "Semestre debe estar entre 1 y 12." };
+  }
+
+  if (data.tipoPostulacion === "academico" && (data.notaAsignatura === null || data.notaAsignatura < 1 || data.notaAsignatura > 7)) {
+    return { success: false, error: "La nota de asignatura para tutor académico debe estar entre 1.0 y 7.0." };
+  }
+
+  if (!data.declaracionAceptada) {
+    return { success: false, error: "Debes aceptar la declaración para enviar la postulación." };
+  }
+
+  if (data.documentos.length < 2) {
+    return { success: false, error: "Debes adjuntar documentos obligatorios." };
   }
 
   if (data.disponibilidad.length === 0) {

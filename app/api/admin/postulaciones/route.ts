@@ -21,7 +21,12 @@ export async function GET() {
   const postulanteIds = [...new Set((postulaciones ?? []).map((item) => item.postulante_id))].filter(Boolean);
   const postulacionIds = (postulaciones ?? []).map((item) => item.id);
 
-  const [{ data: postulantes, error: postulantesError }, { data: areas, error: areasError }, { data: disponibilidad, error: disponibilidadError }] = await Promise.all([
+  const [
+    { data: postulantes, error: postulantesError },
+    { data: areas, error: areasError },
+    { data: disponibilidad, error: disponibilidadError },
+    { data: documentos, error: documentosError }
+  ] = await Promise.all([
     postulanteIds.length > 0
       ? supabase
           .from("postulantes")
@@ -31,7 +36,7 @@ export async function GET() {
     postulacionIds.length > 0
       ? supabase
           .from("postulacion_areas")
-          .select("postulacion_id,area")
+          .select("postulacion_id,area,nota_asignatura")
           .in("postulacion_id", postulacionIds)
       : Promise.resolve({ data: [], error: null }),
     postulacionIds.length > 0
@@ -40,16 +45,23 @@ export async function GET() {
           .select("postulacion_id,dia_semana,bloque,disponible")
           .in("postulacion_id", postulacionIds)
           .eq("disponible", true)
+      : Promise.resolve({ data: [], error: null }),
+    postulacionIds.length > 0
+      ? supabase
+          .from("documentos_postulacion")
+          .select("postulacion_id,tipo_documento,file_url")
+          .in("postulacion_id", postulacionIds)
       : Promise.resolve({ data: [], error: null })
   ]);
 
-  if (postulantesError || areasError || disponibilidadError) {
+  if (postulantesError || areasError || disponibilidadError || documentosError) {
     return NextResponse.json(
       {
         error:
           postulantesError?.message ??
           areasError?.message ??
           disponibilidadError?.message ??
+          documentosError?.message ??
           "No fue posible cargar las postulaciones"
       },
       { status: 500 }
@@ -57,22 +69,31 @@ export async function GET() {
   }
 
   const postulantesMap = new Map((postulantes ?? []).map((item) => [item.id, item]));
-  const areasMap = new Map<number, string[]>();
+
+  const areasMap = new Map<number, { area: string; notaAsignatura: number | null }[]>();
   for (const item of areas ?? []) {
     const list = areasMap.get(item.postulacion_id) ?? [];
-    list.push(item.area);
+    list.push({ area: item.area, notaAsignatura: item.nota_asignatura });
     areasMap.set(item.postulacion_id, list);
   }
 
-  const disponibilidadMap = new Map<number, string[]>();
+  const disponibilidadMap = new Map<number, { diaSemana: string; bloque: number }[]>();
   for (const item of disponibilidad ?? []) {
     const list = disponibilidadMap.get(item.postulacion_id) ?? [];
-    list.push(`${item.dia_semana} bloque ${item.bloque}`);
+    list.push({ diaSemana: item.dia_semana, bloque: item.bloque });
     disponibilidadMap.set(item.postulacion_id, list);
+  }
+
+  const documentosMap = new Map<number, { tipoDocumento: string; fileUrl: string }[]>();
+  for (const item of documentos ?? []) {
+    const list = documentosMap.get(item.postulacion_id) ?? [];
+    list.push({ tipoDocumento: item.tipo_documento, fileUrl: item.file_url });
+    documentosMap.set(item.postulacion_id, list);
   }
 
   const response = (postulaciones ?? []).map((item) => {
     const postulante = postulantesMap.get(item.postulante_id);
+    const area = (areasMap.get(item.id) ?? [])[0] ?? null;
 
     return {
       id: item.id,
@@ -90,8 +111,10 @@ export async function GET() {
             semestre: postulante.semestre
           }
         : null,
-      areas: areasMap.get(item.id) ?? [],
-      disponibilidad: disponibilidadMap.get(item.id) ?? []
+      area: area?.area ?? null,
+      notaAsignatura: area?.notaAsignatura ?? null,
+      disponibilidad: (disponibilidadMap.get(item.id) ?? []).sort((a, b) => a.bloque - b.bloque),
+      documentos: documentosMap.get(item.id) ?? []
     };
   });
 
@@ -107,10 +130,7 @@ export async function PATCH(request: Request) {
 
   const supabase = getSupabaseServerClient();
 
-  const { error } = await supabase
-    .from("postulaciones")
-    .update({ estado: body.estado })
-    .eq("id", body.id);
+  const { error } = await supabase.from("postulaciones").update({ estado: body.estado }).eq("id", body.id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
