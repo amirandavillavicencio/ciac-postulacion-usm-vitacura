@@ -7,7 +7,7 @@ type ValidationResult =
 
 const validDias = new Set(DIAS_SEMANA.map((dia) => dia.value));
 const validBloques: Set<number> = new Set(BLOQUES.map((bloque) => bloque.value));
-const validTipos = new Set(["academico", "administrativo", "mixto"]);
+const validTipos = new Set(["academico", "administrativo"]);
 const validAreas = new Set([
   "matematica",
   "fisica_1_2",
@@ -46,7 +46,6 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
     semestre: toNumber(raw.semestre) ?? 0,
     tipoPostulacion: toString(raw.tipoPostulacion) as PostulacionPayload["tipoPostulacion"],
     area: toString(raw.area) as PostulacionPayload["area"],
-    prioridadAcademica: toNumber(raw.prioridadAcademica) ?? 0,
     notaAsignatura: toNumber(raw.notaAsignatura) ?? 0,
     experiencia: toString(raw.experiencia),
     motivacion: toString(raw.motivacion),
@@ -70,7 +69,7 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
       : []
   };
 
-  if (!data.nombreCompleto || !data.rut || !data.correo || !data.motivacion) {
+  if (!data.nombreCompleto || !data.rut || !data.correo || !data.telefono || !data.carrera || !data.motivacion) {
     return { success: false, error: "Faltan campos requeridos de datos personales o motivación." };
   }
 
@@ -82,8 +81,8 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
     return { success: false, error: "Área de postulación inválida." };
   }
 
-  if (data.semestre < 1) {
-    return { success: false, error: "Semestre debe ser mayor o igual a 1." };
+  if (data.semestre < 1 || data.semestre > 12) {
+    return { success: false, error: "Semestre debe estar entre 1 y 12." };
   }
 
   if (data.disponibilidad.length === 0) {

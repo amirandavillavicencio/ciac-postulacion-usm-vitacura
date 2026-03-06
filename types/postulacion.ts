@@ -1,4 +1,4 @@
-export type TipoPostulacion = "academico" | "administrativo" | "mixto";
+export type TipoPostulacion = "academico" | "administrativo";
 
 export type AreaPostulacion =
   | "matematica"
@@ -24,7 +24,6 @@ export type PostulacionPayload = {
   semestre: number;
   tipoPostulacion: TipoPostulacion;
   area: AreaPostulacion;
-  prioridadAcademica: number;
   notaAsignatura: number;
   experiencia: string;
   motivacion: string;

@@ -123,8 +123,7 @@ export async function POST(request: Request) {
     const { error: insertAreaError } = await supabase.from("postulacion_areas").insert({
       postulacion_id: postulacionId,
       area: payload.area,
-      nota_asignatura: payload.notaAsignatura,
-      prioridad_academica: payload.prioridadAcademica
+      nota_asignatura: payload.notaAsignatura
     });
 
     if (insertAreaError) {
