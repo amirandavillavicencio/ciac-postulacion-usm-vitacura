@@ -1,15 +1,18 @@
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
-import type { DisponibilidadBloque } from "@/types/postulacion";
+import type { BloqueDisponibilidad, DisponibilidadBloque } from "@/types/postulacion";
 
-type BloqueValue = (typeof BLOQUES)[number]["value"];
+type BloqueValue = (typeof BLOQUES)[number]["value"] & BloqueDisponibilidad;
 
 type MatrixCell = {
   key: string;
   day: string;
-  block: string;
+  block: BloqueDisponibilidad;
 };
 
 const legacyBlockMap: Record<string, BloqueValue> = {
+  ALMUERZO: "almuerzo",
+  Almuerzo: "almuerzo",
+  almuerzo: "almuerzo",
   "1": "1-2",
   "2": "1-2",
   "3": "3-4",
@@ -28,16 +31,18 @@ const legacyBlockMap: Record<string, BloqueValue> = {
 
 const blockOrder = new Map<BloqueValue, number>(BLOQUES.map((bloque, index) => [bloque.value, index]));
 
-export function normalizeBloqueValue(value: unknown): string | null {
+export function normalizeBloqueValue(value: unknown): BloqueDisponibilidad | null {
   if (typeof value !== "string" && typeof value !== "number") {
     return null;
   }
 
   const parsed = String(value).trim();
+  const normalized = parsed.toLowerCase();
   if (!parsed) return null;
 
-  if (BLOQUES.some((bloque) => bloque.value === parsed)) return parsed;
-  return legacyBlockMap[parsed] ?? null;
+  if (BLOQUES.some((bloque) => bloque.value === parsed)) return parsed as BloqueDisponibilidad;
+  if (normalized === "almuerzo") return "almuerzo";
+  return legacyBlockMap[parsed] ?? legacyBlockMap[normalized] ?? null;
 }
 
 export function sortBloques(a: string, b: string) {
@@ -53,7 +58,7 @@ export function buildAvailabilityMatrix(): Record<string, MatrixCell[]> {
     result[bloque.value] = DIAS_SEMANA.map((dia) => ({
       key: `disp_${dia.value}_${bloque.value}`,
       day: dia.value,
-      block: bloque.value
+      block: bloque.value as BloqueDisponibilidad
     }));
   }
 
@@ -69,7 +74,7 @@ export function getSelectedAvailabilityFromForm(formData: FormData): Disponibili
       if (formData.get(cell.key)) {
         selected.push({
           diaSemana: cell.day as DisponibilidadBloque["diaSemana"],
-          bloque: cell.block
+          bloque: cell.block as BloqueDisponibilidad
         });
       }
     }

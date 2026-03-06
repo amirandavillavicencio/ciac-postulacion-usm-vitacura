@@ -1,6 +1,6 @@
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
 import { normalizeBloqueValue } from "@/lib/utils/availability";
-import type { PostulacionPayload } from "@/types/postulacion";
+import type { BloqueDisponibilidad, PostulacionPayload } from "@/types/postulacion";
 
 type ValidationResult =
   | { success: true; data: PostulacionPayload }
@@ -60,7 +60,7 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
               bloque: normalizeBloqueValue(value.bloque)
             };
           })
-          .filter((item): item is { diaSemana: string; bloque: string } =>
+          .filter((item): item is { diaSemana: string; bloque: BloqueDisponibilidad } =>
             Boolean(item && item.bloque !== null)
           )
           .map((item) => ({

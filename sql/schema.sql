@@ -35,7 +35,7 @@ CREATE TABLE disponibilidad_bloques (
     id SERIAL PRIMARY KEY,
     postulacion_id INTEGER REFERENCES postulaciones(id),
     dia_semana TEXT,
-    bloque INTEGER,
+    bloque TEXT,
     disponible BOOLEAN DEFAULT TRUE
 );
 
