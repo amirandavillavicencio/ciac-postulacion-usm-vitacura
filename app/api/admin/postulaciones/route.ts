@@ -101,8 +101,22 @@ export async function GET() {
   const response = (postulaciones ?? []).map((item) => {
     const postulante = postulantesMap.get(item.postulante_id);
     const areasData = areasMap.get(item.id) ?? [];
-    const notas = areasData.map((entry) => entry.notaAsignatura).filter((nota): nota is number => typeof nota === "number");
-    const rankingScore = notas.length > 0 ? notas.reduce((acc, nota) => acc + nota, 0) / notas.length : 0;
+
+    const areasConNota = areasData.filter((entry): entry is { area: string; notaAsignatura: number } =>
+      typeof entry.notaAsignatura === "number"
+    );
+
+    const rankingScore =
+      areasConNota.length > 0
+        ? areasConNota.reduce((acc, entry) => acc + entry.notaAsignatura, 0) / areasConNota.length
+        : 0;
+
+    const rankingAreaLabel =
+      areasConNota.length === 1
+        ? areasConNota[0].area
+        : areasConNota.length > 1
+          ? "Promedio de asignaturas"
+          : areasData[0]?.area ?? "";
 
     return {
       id: item.id,
@@ -123,7 +137,8 @@ export async function GET() {
       areas: areasData,
       disponibilidad: disponibilidadMap.get(item.id) ?? [],
       documentos: documentosMap.get(item.id) ?? [],
-      rankingScore
+      rankingScore,
+      rankingAreaLabel
     };
   });
 
