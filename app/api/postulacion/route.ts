@@ -21,7 +21,11 @@ export async function POST(request: Request) {
       .eq("rut", payload.rut)
       .maybeSingle();
 
-    if (existingPostulanteError) {
+    const isPostulanteNotFound =
+      existingPostulanteError?.code === "PGRST116" ||
+      existingPostulanteError?.message.toLowerCase().includes("0 rows");
+
+    if (existingPostulanteError && !isPostulanteNotFound) {
       return NextResponse.json(
         { error: "No fue posible consultar postulante existente.", details: existingPostulanteError.message },
         { status: 500 }
