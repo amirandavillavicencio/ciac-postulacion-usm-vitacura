@@ -14,9 +14,7 @@ type SupabaseDebugError = {
 
 type DocumentoPostulacion = {
   tipoDocumento: string;
-  nombreArchivo: string;
-  rutaArchivo: string;
-  url: string;
+  fileUrl: string;
 };
 
 function buildSupabaseDebugError(error: {
@@ -78,9 +76,7 @@ async function uploadDocument(
 
   return {
     tipoDocumento,
-    nombreArchivo: file.name,
-    rutaArchivo: path,
-    url: publicData.publicUrl
+    fileUrl: publicData.publicUrl
   };
 }
 
@@ -259,9 +255,7 @@ export async function POST(request: Request) {
           uploaded.map((item) => ({
             postulacion_id: postulacionId,
             tipo_documento: item.tipoDocumento,
-            nombre_archivo: item.nombreArchivo,
-            ruta_archivo: item.rutaArchivo,
-            url_publica: item.url
+            file_url: item.fileUrl
           }))
         );
 
