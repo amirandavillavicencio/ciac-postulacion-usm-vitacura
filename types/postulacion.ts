@@ -10,9 +10,19 @@ export type AreaPostulacion =
 
 export type DiaSemana = "lunes" | "martes" | "miercoles" | "jueves" | "viernes";
 
+export type BloqueDisponibilidad =
+  | "1-2"
+  | "3-4"
+  | "5-6"
+  | "7-8"
+  | "almuerzo"
+  | "9-10"
+  | "11-12"
+  | "13-14";
+
 export type DisponibilidadBloque = {
   diaSemana: DiaSemana;
-  bloque: string;
+  bloque: BloqueDisponibilidad;
 };
 
 export type PostulacionPayload = {
