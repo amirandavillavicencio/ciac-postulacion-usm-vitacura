@@ -12,7 +12,7 @@ export type DiaSemana = "lunes" | "martes" | "miercoles" | "jueves" | "viernes";
 
 export type DisponibilidadBloque = {
   diaSemana: DiaSemana;
-  bloque: number;
+  bloque: string;
 };
 
 export type PostulacionPayload = {

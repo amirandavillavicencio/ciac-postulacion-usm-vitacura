@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
+import { normalizeBloqueValue, sortBloques } from "@/lib/utils/availability";
 
 type AreaInfo = {
   area: string;
@@ -11,7 +12,7 @@ type AreaInfo = {
 
 type DisponibilidadInfo = {
   diaSemana: string;
-  bloque: number;
+  bloque: string;
 };
 
 type DocumentoInfo = {
@@ -205,13 +206,16 @@ export default function AdminPostulacionesPage() {
   }
 
   const selectedByDay = useMemo(() => {
-    if (!selected) return {} as Record<string, number[]>;
+    if (!selected) return {} as Record<string, string[]>;
 
-    const grouped: Record<string, number[]> = {};
+    const grouped: Record<string, string[]> = {};
     for (const day of DIA_ORDEN) grouped[day] = [];
 
     for (const item of selected.disponibilidad) {
-      grouped[item.diaSemana] = [...(grouped[item.diaSemana] ?? []), item.bloque].sort((a, b) => a - b);
+      const bloque = normalizeBloqueValue(item.bloque);
+      if (!bloque) continue;
+
+      grouped[item.diaSemana] = [...(grouped[item.diaSemana] ?? []), bloque].sort(sortBloques);
     }
 
     return grouped;
@@ -406,7 +410,7 @@ export default function AdminPostulacionesPage() {
                 <ul className="list-inside list-disc space-y-1">
                   {DIA_ORDEN.map((day) => (
                     <li key={day}>
-                      {formatDay(day)}: {selectedByDay[day]?.length ? `bloques ${selectedByDay[day].join(", ")}` : "sin bloques"}
+                      {formatDay(day)}: {selectedByDay[day]?.length ? `tramos ${selectedByDay[day].join(", ")}` : "sin tramos"}
                     </li>
                   ))}
                 </ul>
@@ -418,7 +422,7 @@ export default function AdminPostulacionesPage() {
                   <table className="min-w-full border-collapse text-center text-xs">
                     <thead>
                       <tr>
-                        <th className="border border-slate-300 px-2 py-2 text-left">Bloque</th>
+                        <th className="border border-slate-300 px-2 py-2 text-left">Tramo</th>
                         {DIAS_SEMANA.map((dia) => (
                           <th key={dia.value} className="border border-slate-300 px-2 py-2">{dia.label}</th>
                         ))}
@@ -428,12 +432,11 @@ export default function AdminPostulacionesPage() {
                       {BLOQUES.map((bloque) => (
                         <tr key={bloque.value}>
                           <td className="border border-slate-300 px-2 py-2 text-left">
-                            {bloque.label}
-                            <div className="text-[10px] text-slate-500">{bloque.rango}</div>
+                            {bloque.label} ({bloque.rango})
                           </td>
                           {DIAS_SEMANA.map((dia) => {
                             const isSelected = selected.disponibilidad.some(
-                              (item) => item.diaSemana === dia.value && item.bloque === bloque.value
+                              (item) => item.diaSemana === dia.value && normalizeBloqueValue(item.bloque) === bloque.value
                             );
 
                             return (

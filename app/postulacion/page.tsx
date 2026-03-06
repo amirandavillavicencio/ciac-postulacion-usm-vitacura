@@ -99,7 +99,7 @@ export default function PostulacionPage() {
     }
 
     if (disponibilidad.length === 0) {
-      nextErrors.disponibilidad = "Debes seleccionar al menos un bloque de disponibilidad.";
+      nextErrors.disponibilidad = "Debes seleccionar al menos un tramo de disponibilidad.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -341,8 +341,8 @@ export default function PostulacionPage() {
             <div className="space-y-3 md:hidden">
               {BLOQUES.map((bloque) => (
                 <article key={bloque.value} className="rounded-xl border border-slate-200 p-3">
-                  <p className="text-sm font-semibold text-slate-800">{bloque.label}</p>
-                  <p className="mb-3 text-xs text-slate-500">{bloque.rango}</p>
+                  <p className="text-sm font-semibold text-slate-800">{bloque.label} ({bloque.rango})</p>
+                  <p className="mb-3 text-xs text-slate-500">Selecciona los días para este tramo.</p>
                   <div className="grid grid-cols-2 gap-2">
                     {matrix[bloque.value].map((cell) => (
                       <label
@@ -370,7 +370,7 @@ export default function PostulacionPage() {
                 <thead>
                   <tr>
                     <th className="rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-700">
-                      Bloque
+                      Tramo
                     </th>
                     {DIAS_SEMANA.map((dia) => (
                       <th
@@ -386,8 +386,7 @@ export default function PostulacionPage() {
                   {BLOQUES.map((bloque) => (
                     <tr key={bloque.value}>
                       <td className="rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200">
-                        <div>{bloque.label}</div>
-                        <div className="text-xs text-slate-500">{bloque.rango}</div>
+                        <div>{bloque.label} ({bloque.rango})</div>
                       </td>
                       {matrix[bloque.value].map((cell) => (
                         <td
@@ -409,7 +408,7 @@ export default function PostulacionPage() {
             </div>
 
             <p className="mt-4 text-sm text-slate-500">
-              Marca todos los bloques en que realmente podrías trabajar.
+              Marca todos los tramos en que realmente podrías trabajar.
             </p>
             {errors.disponibilidad && <p className="mt-2 text-sm font-medium text-red-600">{errors.disponibilidad}</p>}
           </section>
