@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 type PostulacionAdmin = {
   id: number;
-  tipoPostulacion: string;
+  tipoPostulacion: "academico" | "administrativo" | string;
   motivacion: string;
   estado: string;
   createdAt: string;
@@ -22,12 +22,19 @@ type PostulacionAdmin = {
 
 const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"];
 
+function formatTipo(tipo: string) {
+  if (tipo === "academico") return "Tutor académico";
+  if (tipo === "administrativo") return "Apoyo administrativo";
+  return tipo;
+}
+
 export default function AdminPostulacionesPage() {
   const [postulaciones, setPostulaciones] = useState<PostulacionAdmin[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [tipoFilter, setTipoFilter] = useState<string>("");
   const [carreraFilter, setCarreraFilter] = useState<string>("");
   const [estadoFilter, setEstadoFilter] = useState<string>("");
+  const [searchFilter, setSearchFilter] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -43,21 +50,36 @@ export default function AdminPostulacionesPage() {
     fetchPostulaciones();
   }, []);
 
-  const filtered = useMemo(
-    () =>
-      postulaciones.filter((item) => {
-        const tipoOk = tipoFilter ? item.tipoPostulacion === tipoFilter : true;
-        const carreraOk = carreraFilter ? item.postulante?.carrera === carreraFilter : true;
-        const estadoOk = estadoFilter ? item.estado === estadoFilter : true;
+  const filtered = useMemo(() => {
+    const term = searchFilter.trim().toLowerCase();
 
-        return tipoOk && carreraOk && estadoOk;
-      }),
-    [carreraFilter, estadoFilter, postulaciones, tipoFilter]
-  );
+    return postulaciones.filter((item) => {
+      const tipoOk = tipoFilter ? item.tipoPostulacion === tipoFilter : true;
+      const carreraOk = carreraFilter ? item.postulante?.carrera === carreraFilter : true;
+      const estadoOk = estadoFilter ? item.estado === estadoFilter : true;
+      const nombre = item.postulante?.nombreCompleto?.toLowerCase() ?? "";
+      const rut = item.postulante?.rut?.toLowerCase() ?? "";
+      const searchOk = term ? nombre.includes(term) || rut.includes(term) : true;
+
+      return tipoOk && carreraOk && estadoOk && searchOk;
+    });
+  }, [carreraFilter, estadoFilter, postulaciones, searchFilter, tipoFilter]);
 
   const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0] ?? null;
 
   const carreras = [...new Set(postulaciones.map((item) => item.postulante?.carrera).filter(Boolean))] as string[];
+
+  const kpis = useMemo(() => {
+    const total = postulaciones.length;
+    const academicos = postulaciones.filter((item) => item.tipoPostulacion === "academico").length;
+    const administrativos = postulaciones.filter((item) => item.tipoPostulacion === "administrativo").length;
+
+    return [
+      { label: "Total postulantes", value: total },
+      { label: "Total tutores académicos", value: academicos },
+      { label: "Total apoyos administrativos", value: administrativos }
+    ];
+  }, [postulaciones]);
 
   async function handleStatusChange(id: number, estado: string) {
     setUpdatingId(id);
@@ -82,11 +104,27 @@ export default function AdminPostulacionesPage() {
         <div>
           <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-ciac-blue">Panel interno</p>
           <h1 className="text-3xl font-bold text-ciac-navy md:text-4xl">Postulaciones CIAC</h1>
-          <p className="mt-3 max-w-3xl text-slate-600">Revisión y gestión de postulantes.</p>
+          <p className="mt-3 max-w-3xl text-slate-600">Revisión y gestión de postulantes en tiempo real.</p>
         </div>
 
+        <section className="grid gap-4 md:grid-cols-3">
+          {kpis.map((item) => (
+            <article key={item.label} className="card p-5">
+              <p className="text-sm font-medium text-slate-500">{item.label}</p>
+              <p className="mt-3 text-3xl font-bold text-ciac-navy">{item.value}</p>
+            </article>
+          ))}
+        </section>
+
         <section className="card p-6">
-          <div className="mb-5 grid gap-4 md:grid-cols-3">
+          <div className="mb-5 grid gap-4 md:grid-cols-4">
+            <input
+              className="input"
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              placeholder="Buscar por nombre o RUT"
+            />
+
             <select className="input" value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value)}>
               <option value="">Todos los tipos</option>
               <option value="academico">Tutor académico</option>
@@ -120,8 +158,8 @@ export default function AdminPostulacionesPage() {
                   <th className="px-4 py-3">RUT</th>
                   <th className="px-4 py-3">Carrera</th>
                   <th className="px-4 py-3">Semestre</th>
-                  <th className="px-4 py-3">Tipo</th>
-                  <th className="px-4 py-3">Fecha</th>
+                  <th className="px-4 py-3">Tipo de postulación</th>
+                  <th className="px-4 py-3">Fecha de postulación</th>
                   <th className="px-4 py-3">Estado</th>
                 </tr>
               </thead>
@@ -136,7 +174,7 @@ export default function AdminPostulacionesPage() {
                     <td className="px-4 py-3">{item.postulante?.rut ?? "-"}</td>
                     <td className="px-4 py-3">{item.postulante?.carrera ?? "-"}</td>
                     <td className="px-4 py-3">{item.postulante?.semestre ?? "-"}</td>
-                    <td className="px-4 py-3">{item.tipoPostulacion}</td>
+                    <td className="px-4 py-3">{formatTipo(item.tipoPostulacion)}</td>
                     <td className="px-4 py-3">{new Date(item.createdAt).toLocaleDateString("es-CL")}</td>
                     <td className="px-4 py-3">{item.estado}</td>
                   </tr>
@@ -159,7 +197,7 @@ export default function AdminPostulacionesPage() {
               <p><strong>Teléfono:</strong> {selected.postulante?.telefono ?? "-"}</p>
               <p><strong>Carrera:</strong> {selected.postulante?.carrera ?? "-"}</p>
               <p><strong>Semestre:</strong> {selected.postulante?.semestre ?? "-"}</p>
-              <p><strong>Motivación:</strong> {selected.motivacion}</p>
+              <p><strong>Motivación:</strong> {selected.motivacion || "-"}</p>
               <p><strong>Áreas postuladas:</strong> {selected.areas.join(", ") || "-"}</p>
               <p><strong>Disponibilidad:</strong> {selected.disponibilidad.join(", ") || "-"}</p>
 
