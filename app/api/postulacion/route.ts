@@ -8,6 +8,8 @@ type SupabaseDebugError = {
   details: string | null;
   hint: string | null;
   code: string | null;
+  step: string;
+  stack: string | null;
 };
 
 function buildSupabaseDebugError(error: {
@@ -15,18 +17,25 @@ function buildSupabaseDebugError(error: {
   details?: string;
   hint?: string;
   code?: string;
-}): SupabaseDebugError {
+}, step: string): SupabaseDebugError {
   return {
     message: error.message,
     details: error.details ?? null,
     hint: error.hint ?? null,
-    code: error.code ?? null
+    code: error.code ?? null,
+    step,
+    stack: null
   };
 }
 
 export async function POST(request: Request) {
+  let step = "start";
+
   try {
+    step = "parse-body";
     const body = await request.json();
+
+    step = "validate-payload";
     const validation = validatePostulacionPayload(body);
 
     if (!validation.success) {
@@ -34,8 +43,11 @@ export async function POST(request: Request) {
     }
 
     const payload = validation.data;
+
+    step = "create-supabase-client";
     const supabase = getSupabaseServerClient();
 
+    step = "find-existing-postulante";
     const { data: existingPostulante, error: existingPostulanteError } = await supabase
       .from("postulantes")
       .select("id")
@@ -47,7 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "No fue posible consultar postulante existente.",
-          debug: buildSupabaseDebugError(existingPostulanteError)
+          debug: buildSupabaseDebugError(existingPostulanteError, step)
         },
         { status: 500 }
       );
@@ -56,6 +68,7 @@ export async function POST(request: Request) {
     let postulanteId = existingPostulante?.id;
 
     if (!postulanteId) {
+      step = "insert-postulante";
       const { data: insertedPostulante, error: insertPostulanteError } = await supabase
         .from("postulantes")
         .insert({
@@ -73,7 +86,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error: "No fue posible crear postulante.",
-            debug: buildSupabaseDebugError(insertPostulanteError)
+            debug: buildSupabaseDebugError(insertPostulanteError, step)
           },
           { status: 500 }
         );
@@ -82,6 +95,7 @@ export async function POST(request: Request) {
       postulanteId = insertedPostulante.id;
     }
 
+    step = "insert-postulacion";
     const { data: insertedPostulacion, error: insertPostulacionError } = await supabase
       .from("postulaciones")
       .insert({
@@ -97,7 +111,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "No fue posible crear postulación.",
-          debug: buildSupabaseDebugError(insertPostulacionError)
+          debug: buildSupabaseDebugError(insertPostulacionError, step)
         },
         { status: 500 }
       );
@@ -105,6 +119,7 @@ export async function POST(request: Request) {
 
     const postulacionId = insertedPostulacion.id;
 
+    step = "insert-area";
     const { error: insertAreaError } = await supabase.from("postulacion_areas").insert({
       postulacion_id: postulacionId,
       area: payload.area,
@@ -116,7 +131,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "No fue posible guardar el área de postulación.",
-          debug: buildSupabaseDebugError(insertAreaError)
+          debug: buildSupabaseDebugError(insertAreaError, step)
         },
         { status: 500 }
       );
@@ -129,6 +144,7 @@ export async function POST(request: Request) {
       disponible: true
     }));
 
+    step = "insert-disponibilidad";
     const { error: insertDisponibilidadError } = await supabase
       .from("disponibilidad_bloques")
       .insert(disponibilidadRows);
@@ -137,7 +153,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "No fue posible guardar la disponibilidad.",
-          debug: buildSupabaseDebugError(insertDisponibilidadError)
+          debug: buildSupabaseDebugError(insertDisponibilidadError, step)
         },
         { status: 500 }
       );
@@ -146,6 +162,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, postulacionId }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error interno";
+    const stack = error instanceof Error ? error.stack ?? null : null;
+
     return NextResponse.json(
       {
         error: "No fue posible procesar la postulación.",
@@ -153,7 +171,9 @@ export async function POST(request: Request) {
           message,
           details: null,
           hint: null,
-          code: null
+          code: null,
+          step,
+          stack
         }
       },
       { status: 500 }
