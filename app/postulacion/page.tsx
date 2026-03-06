@@ -25,34 +25,102 @@ type ApiResponse = {
   debug?: ApiErrorDebug;
 };
 
+type FormErrors = Partial<Record<
+  | "rut"
+  | "nombre"
+  | "correo"
+  | "telefono"
+  | "carrera"
+  | "semestre"
+  | "tipoPostulacion"
+  | "motivacion"
+  | "documentos",
+  string
+>>;
+
+const CARRERAS = [
+  "Ingeniería Civil Industrial",
+  "Ingeniería Comercial",
+  "Ingeniería en Aviación Comercial",
+  "Técnico Universitario en Administración de Empresas",
+  "Programa de Formación de Piloto Comercial"
+];
+
+const SEMESTRES = Array.from({ length: 12 }, (_, index) => String(index + 1));
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export default function PostulacionPage() {
   const matrix = useMemo(() => buildAvailabilityMatrix(), []);
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [feedbackMessage, setFeedbackMessage] = useState<string>("");
   const [debugDetails, setDebugDetails] = useState<ApiErrorDebug | null>(null);
+  const [errors, setErrors] = useState<FormErrors>({});
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubmitStatus("loading");
     setFeedbackMessage("");
     setDebugDetails(null);
 
     const formElement = event.currentTarget;
     const formData = new FormData(formElement);
 
+    const nombre = String(formData.get("nombre") ?? "").trim();
+    const rut = String(formData.get("rut") ?? "").trim();
+    const correo = String(formData.get("correo") ?? "").trim();
+    const telefono = String(formData.get("telefono") ?? "").trim();
+    const carrera = String(formData.get("carrera") ?? "").trim();
+    const semestre = String(formData.get("semestre") ?? "").trim();
+    const tipoPostulacion = String(formData.get("tipoPostulacion") ?? "").trim();
+    const motivacion = String(formData.get("motivacion") ?? "").trim();
+
+    const siga = formData.get("siga");
+    const cv = formData.get("cv");
+    const horario = formData.get("horario");
+
+    const nextErrors: FormErrors = {};
+
+    if (!rut) nextErrors.rut = "El RUT es obligatorio.";
+    if (!nombre) nextErrors.nombre = "El nombre es obligatorio.";
+    if (!correo) nextErrors.correo = "El correo es obligatorio.";
+    else if (!isValidEmail(correo)) nextErrors.correo = "Ingresa un correo válido.";
+    if (!telefono) nextErrors.telefono = "El teléfono es obligatorio.";
+    if (!carrera) nextErrors.carrera = "La carrera es obligatoria.";
+    if (!semestre) nextErrors.semestre = "El semestre es obligatorio.";
+    if (!tipoPostulacion) nextErrors.tipoPostulacion = "El tipo de postulación es obligatorio.";
+    if (!motivacion) nextErrors.motivacion = "La motivación es obligatoria.";
+
+    const docsCompleted = [siga, cv, horario].every(
+      (file) => file instanceof File && file.size > 0
+    );
+    if (!docsCompleted) {
+      nextErrors.documentos = "Debes adjuntar los documentos solicitados para enviar la postulación.";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      setSubmitStatus("error");
+      setFeedbackMessage("Revisa los campos marcados e intenta nuevamente.");
+      return;
+    }
+
+    setErrors({});
+    setSubmitStatus("loading");
+
     const payload: PostulacionPayload = {
-      nombreCompleto: String(formData.get("nombre") ?? "").trim(),
-      rut: String(formData.get("rut") ?? "").trim(),
-      correo: String(formData.get("correo") ?? "").trim(),
-      telefono: String(formData.get("telefono") ?? "").trim(),
-      carrera: String(formData.get("carrera") ?? "").trim(),
-      semestre: Number(formData.get("semestre") ?? 0),
-      tipoPostulacion: String(formData.get("tipoPostulacion") ?? "") as PostulacionPayload["tipoPostulacion"],
+      nombreCompleto: nombre,
+      rut,
+      correo,
+      telefono,
+      carrera,
+      semestre: Number(semestre),
+      tipoPostulacion: tipoPostulacion as PostulacionPayload["tipoPostulacion"],
       area: String(formData.get("area") ?? "") as PostulacionPayload["area"],
-      prioridadAcademica: Number(formData.get("prioridad") ?? 0),
       notaAsignatura: Number(formData.get("nota") ?? 0),
       experiencia: String(formData.get("experiencia") ?? "").trim(),
-      motivacion: String(formData.get("motivacion") ?? "").trim(),
+      motivacion,
       disponibilidad: getSelectedAvailabilityFromForm(formData)
     };
 
@@ -84,6 +152,7 @@ export default function PostulacionPage() {
       setFeedbackMessage("¡Postulación enviada correctamente!");
       setDebugDetails(null);
       formElement.reset();
+      setErrors({});
     } catch (error) {
       setSubmitStatus("error");
       setFeedbackMessage(error instanceof Error ? error.message : "Error de red al enviar la postulación. Intenta nuevamente.");
@@ -127,6 +196,7 @@ export default function PostulacionPage() {
                   Nombre completo
                 </label>
                 <input id="nombre" name="nombre" className="input" required />
+                {errors.nombre && <p className="mt-1 text-sm text-red-600">{errors.nombre}</p>}
               </div>
 
               <div>
@@ -134,6 +204,7 @@ export default function PostulacionPage() {
                   RUT
                 </label>
                 <input id="rut" name="rut" className="input" placeholder="12.345.678-9" required />
+                {errors.rut && <p className="mt-1 text-sm text-red-600">{errors.rut}</p>}
               </div>
 
               <div>
@@ -141,6 +212,7 @@ export default function PostulacionPage() {
                   Correo institucional
                 </label>
                 <input id="correo" name="correo" type="email" className="input" required />
+                {errors.correo && <p className="mt-1 text-sm text-red-600">{errors.correo}</p>}
               </div>
 
               <div>
@@ -148,20 +220,41 @@ export default function PostulacionPage() {
                   Teléfono
                 </label>
                 <input id="telefono" name="telefono" className="input" required />
+                {errors.telefono && <p className="mt-1 text-sm text-red-600">{errors.telefono}</p>}
               </div>
 
               <div>
                 <label className="label" htmlFor="carrera">
                   Carrera
                 </label>
-                <input id="carrera" name="carrera" className="input" required />
+                <select id="carrera" name="carrera" className="input" required defaultValue="">
+                  <option value="" disabled>
+                    Selecciona una carrera
+                  </option>
+                  {CARRERAS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                {errors.carrera && <p className="mt-1 text-sm text-red-600">{errors.carrera}</p>}
               </div>
 
               <div>
                 <label className="label" htmlFor="semestre">
                   Semestre actual
                 </label>
-                <input id="semestre" name="semestre" type="number" min="1" className="input" required />
+                <select id="semestre" name="semestre" className="input" required defaultValue="">
+                  <option value="" disabled>
+                    Selecciona semestre
+                  </option>
+                  {SEMESTRES.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+                {errors.semestre && <p className="mt-1 text-sm text-red-600">{errors.semestre}</p>}
               </div>
             </div>
           </section>
@@ -174,12 +267,16 @@ export default function PostulacionPage() {
                 <label className="label" htmlFor="tipoPostulacion">
                   Tipo
                 </label>
-                <select id="tipoPostulacion" name="tipoPostulacion" className="input" required>
-                  <option value="">Selecciona una opción</option>
+                <select id="tipoPostulacion" name="tipoPostulacion" className="input" required defaultValue="">
+                  <option value="" disabled>
+                    Selecciona una opción
+                  </option>
                   <option value="academico">Tutor académico</option>
                   <option value="administrativo">Apoyo administrativo</option>
-                  <option value="mixto">Mixto</option>
                 </select>
+                {errors.tipoPostulacion && (
+                  <p className="mt-1 text-sm text-red-600">{errors.tipoPostulacion}</p>
+                )}
               </div>
 
               <div>
@@ -195,20 +292,6 @@ export default function PostulacionPage() {
                   <option value="quimica">Química</option>
                   <option value="administrativo">Administrativo</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="label" htmlFor="prioridad">
-                  Prioridad académica
-                </label>
-                <input
-                  id="prioridad"
-                  name="prioridad"
-                  type="number"
-                  step="0.01"
-                  className="input"
-                  required
-                />
               </div>
 
               <div>
@@ -242,6 +325,7 @@ export default function PostulacionPage() {
                   placeholder="Explica por qué quieres postular al CIAC"
                   required
                 />
+                {errors.motivacion && <p className="mt-1 text-sm text-red-600">{errors.motivacion}</p>}
               </div>
             </div>
           </section>
@@ -309,6 +393,7 @@ export default function PostulacionPage() {
                   name="siga"
                   type="file"
                   className="input file:mr-3 file:rounded-lg file:border-0 file:bg-ciac-light file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ciac-blue"
+                  required
                 />
               </div>
 
@@ -321,6 +406,7 @@ export default function PostulacionPage() {
                   name="cv"
                   type="file"
                   className="input file:mr-3 file:rounded-lg file:border-0 file:bg-ciac-light file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ciac-blue"
+                  required
                 />
               </div>
 
@@ -333,9 +419,11 @@ export default function PostulacionPage() {
                   name="horario"
                   type="file"
                   className="input file:mr-3 file:rounded-lg file:border-0 file:bg-ciac-light file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ciac-blue"
+                  required
                 />
               </div>
             </div>
+            {errors.documentos && <p className="mt-3 text-sm text-red-600">{errors.documentos}</p>}
           </section>
 
           {submitStatus !== "idle" && (
