@@ -6,6 +6,10 @@ const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"] as const;
 
 type EstadoPostulacion = (typeof ESTADOS)[number];
 
+function isMissingTableError(message?: string) {
+  return typeof message === "string" && message.toLowerCase().includes("does not exist");
+}
+
 export async function GET() {
   const supabase = getSupabaseServerClient();
 
@@ -21,7 +25,12 @@ export async function GET() {
   const postulanteIds = [...new Set((postulaciones ?? []).map((item) => item.postulante_id))].filter(Boolean);
   const postulacionIds = (postulaciones ?? []).map((item) => item.id);
 
-  const [{ data: postulantes, error: postulantesError }, { data: areas, error: areasError }, { data: disponibilidad, error: disponibilidadError }] = await Promise.all([
+  const [
+    { data: postulantes, error: postulantesError },
+    { data: areas, error: areasError },
+    { data: disponibilidad, error: disponibilidadError },
+    docsResult
+  ] = await Promise.all([
     postulanteIds.length > 0
       ? supabase
           .from("postulantes")
@@ -31,7 +40,7 @@ export async function GET() {
     postulacionIds.length > 0
       ? supabase
           .from("postulacion_areas")
-          .select("postulacion_id,area")
+          .select("postulacion_id,area,nota_asignatura")
           .in("postulacion_id", postulacionIds)
       : Promise.resolve({ data: [], error: null }),
     postulacionIds.length > 0
@@ -40,6 +49,9 @@ export async function GET() {
           .select("postulacion_id,dia_semana,bloque,disponible")
           .in("postulacion_id", postulacionIds)
           .eq("disponible", true)
+      : Promise.resolve({ data: [], error: null }),
+    postulacionIds.length > 0
+      ? supabase.from("documentos_postulacion").select("*").in("postulacion_id", postulacionIds)
       : Promise.resolve({ data: [], error: null })
   ]);
 
@@ -56,23 +68,41 @@ export async function GET() {
     );
   }
 
+  if (docsResult.error && !isMissingTableError(docsResult.error.message)) {
+    return NextResponse.json({ error: docsResult.error.message }, { status: 500 });
+  }
+
   const postulantesMap = new Map((postulantes ?? []).map((item) => [item.id, item]));
-  const areasMap = new Map<number, string[]>();
+  const areasMap = new Map<number, { area: string; notaAsignatura: number | null }[]>();
   for (const item of areas ?? []) {
     const list = areasMap.get(item.postulacion_id) ?? [];
-    list.push(item.area);
+    list.push({ area: item.area, notaAsignatura: item.nota_asignatura });
     areasMap.set(item.postulacion_id, list);
   }
 
-  const disponibilidadMap = new Map<number, string[]>();
+  const disponibilidadMap = new Map<number, { diaSemana: string; bloque: number }[]>();
   for (const item of disponibilidad ?? []) {
     const list = disponibilidadMap.get(item.postulacion_id) ?? [];
-    list.push(`${item.dia_semana} bloque ${item.bloque}`);
+    list.push({ diaSemana: item.dia_semana, bloque: item.bloque });
     disponibilidadMap.set(item.postulacion_id, list);
+  }
+
+  const documentosMap = new Map<number, { tipo: string; nombre: string; url: string }[]>();
+  for (const item of docsResult.data ?? []) {
+    const list = documentosMap.get(item.postulacion_id) ?? [];
+    list.push({
+      tipo: item.tipo_documento ?? item.tipo ?? "Documento",
+      nombre: item.nombre_archivo ?? item.nombre ?? "Archivo",
+      url: item.url_publica ?? item.url ?? item.path ?? ""
+    });
+    documentosMap.set(item.postulacion_id, list);
   }
 
   const response = (postulaciones ?? []).map((item) => {
     const postulante = postulantesMap.get(item.postulante_id);
+    const areasData = areasMap.get(item.id) ?? [];
+    const notas = areasData.map((entry) => entry.notaAsignatura).filter((nota): nota is number => typeof nota === "number");
+    const rankingScore = notas.length > 0 ? notas.reduce((acc, nota) => acc + nota, 0) / notas.length : 0;
 
     return {
       id: item.id,
@@ -90,8 +120,10 @@ export async function GET() {
             semestre: postulante.semestre
           }
         : null,
-      areas: areasMap.get(item.id) ?? [],
-      disponibilidad: disponibilidadMap.get(item.id) ?? []
+      areas: areasData,
+      disponibilidad: disponibilidadMap.get(item.id) ?? [],
+      documentos: documentosMap.get(item.id) ?? [],
+      rankingScore
     };
   });
 

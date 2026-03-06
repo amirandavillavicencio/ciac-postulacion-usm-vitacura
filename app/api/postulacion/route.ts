@@ -12,6 +12,13 @@ type SupabaseDebugError = {
   stack: string | null;
 };
 
+type DocumentoPostulacion = {
+  tipoDocumento: string;
+  nombreArchivo: string;
+  rutaArchivo: string;
+  url: string;
+};
+
 function buildSupabaseDebugError(error: {
   message: string;
   details?: string;
@@ -28,12 +35,72 @@ function buildSupabaseDebugError(error: {
   };
 }
 
+function sanitizeFileName(name: string) {
+  return name
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .toLowerCase();
+}
+
+async function uploadDocument(
+  postulacionId: number,
+  tipoDocumento: string,
+  file: File,
+  bucket: string
+): Promise<DocumentoPostulacion | null> {
+  if (!(file instanceof File) || file.size <= 0) return null;
+
+  const supabase = getSupabaseServerClient();
+  const extension = file.name.split(".").pop() ?? "bin";
+  const safeName = sanitizeFileName(file.name.replace(/\.[^.]+$/, ""));
+  const path = `postulaciones/${postulacionId}/${tipoDocumento}-${Date.now()}-${safeName}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type || "application/octet-stream"
+  });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
+
+  return {
+    tipoDocumento,
+    nombreArchivo: file.name,
+    rutaArchivo: path,
+    url: publicData.publicUrl
+  };
+}
+
 export async function POST(request: Request) {
   let step = "start";
 
   try {
-    step = "parse-body";
-    const body = await request.json();
+    step = "read-body";
+    const contentType = request.headers.get("content-type") ?? "";
+
+    let body: unknown;
+    let sigaFile: File | null = null;
+    let cvFile: File | null = null;
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await request.formData();
+      const payloadRaw = formData.get("payload");
+
+      if (typeof payloadRaw !== "string") {
+        return NextResponse.json({ error: "Payload inválido." }, { status: 400 });
+      }
+
+      body = JSON.parse(payloadRaw);
+      sigaFile = formData.get("siga") as File | null;
+      cvFile = formData.get("cv") as File | null;
+    } else {
+      body = await request.json();
+    }
 
     step = "validate-payload";
     const validation = validatePostulacionPayload(body);
@@ -136,17 +203,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const disponibilidadRows = payload.disponibilidad.map((item) => ({
+    step = "insert-disponibilidad";
+    const rows = payload.disponibilidad.map((item) => ({
       postulacion_id: postulacionId,
       dia_semana: item.diaSemana,
       bloque: item.bloque,
       disponible: true
     }));
 
-    step = "insert-disponibilidad";
-    const { error: insertDisponibilidadError } = await supabase
-      .from("disponibilidad_bloques")
-      .insert(disponibilidadRows);
+    const { error: insertDisponibilidadError } = await supabase.from("disponibilidad_bloques").insert(rows);
 
     if (insertDisponibilidadError) {
       return NextResponse.json(
@@ -158,24 +223,76 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ ok: true, postulacionId }, { status: 201 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Error interno";
-    const stack = error instanceof Error ? error.stack ?? null : null;
+    if (sigaFile || cvFile) {
+      step = "upload-documentos";
+      const bucket = process.env.SUPABASE_DOCUMENTS_BUCKET ?? "documentos-postulacion";
+      const uploaded = (
+        await Promise.all([
+          uploadDocument(postulacionId, "resumen_siga", sigaFile as File, bucket),
+          uploadDocument(postulacionId, "curriculum_vitae", cvFile as File, bucket)
+        ])
+      ).filter((item): item is DocumentoPostulacion => Boolean(item));
 
-    return NextResponse.json(
-      {
-        error: "No fue posible procesar la postulación.",
-        debug: {
-          message,
-          details: null,
-          hint: null,
-          code: null,
-          step,
-          stack
+      if (uploaded.length > 0) {
+        step = "insert-documentos";
+        const { error: insertDocsError } = await supabase.from("documentos_postulacion").insert(
+          uploaded.map((item) => ({
+            postulacion_id: postulacionId,
+            tipo_documento: item.tipoDocumento,
+            nombre_archivo: item.nombreArchivo,
+            ruta_archivo: item.rutaArchivo,
+            url_publica: item.url
+          }))
+        );
+
+        if (insertDocsError) {
+          return NextResponse.json(
+            {
+              error: "La postulación se guardó, pero no fue posible registrar los documentos.",
+              debug: buildSupabaseDebugError(insertDocsError, step)
+            },
+            { status: 500 }
+          );
         }
-      },
-      { status: 500 }
-    );
+      }
+    }
+
+    return NextResponse.json({ ok: true }, { status: 201 });
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        {
+          error: "El cuerpo de la solicitud no es JSON válido.",
+          debug: {
+            message: error.message,
+            details: null,
+            hint: null,
+            code: null,
+            step,
+            stack: error.stack ?? null
+          }
+        },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof Error) {
+      return NextResponse.json(
+        {
+          error: "No fue posible procesar la postulación.",
+          debug: {
+            message: error.message,
+            details: null,
+            hint: null,
+            code: null,
+            step,
+            stack: error.stack ?? null
+          }
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ error: "Error inesperado al procesar la postulación." }, { status: 500 });
   }
 }

@@ -34,7 +34,8 @@ type FormErrors = Partial<Record<
   | "semestre"
   | "tipoPostulacion"
   | "motivacion"
-  | "documentos",
+  | "documentos"
+  | "disponibilidad",
   string
 >>;
 
@@ -78,7 +79,7 @@ export default function PostulacionPage() {
 
     const siga = formData.get("siga");
     const cv = formData.get("cv");
-    const horario = formData.get("horario");
+    const disponibilidad = getSelectedAvailabilityFromForm(formData);
 
     const nextErrors: FormErrors = {};
 
@@ -92,11 +93,13 @@ export default function PostulacionPage() {
     if (!tipoPostulacion) nextErrors.tipoPostulacion = "El tipo de postulación es obligatorio.";
     if (!motivacion) nextErrors.motivacion = "La motivación es obligatoria.";
 
-    const docsCompleted = [siga, cv, horario].every(
-      (file) => file instanceof File && file.size > 0
-    );
+    const docsCompleted = [siga, cv].every((file) => file instanceof File && file.size > 0);
     if (!docsCompleted) {
       nextErrors.documentos = "Debes adjuntar los documentos solicitados para enviar la postulación.";
+    }
+
+    if (disponibilidad.length === 0) {
+      nextErrors.disponibilidad = "Debes seleccionar al menos un bloque de disponibilidad.";
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -121,16 +124,18 @@ export default function PostulacionPage() {
       notaAsignatura: Number(formData.get("nota") ?? 0),
       experiencia: String(formData.get("experiencia") ?? "").trim(),
       motivacion,
-      disponibilidad: getSelectedAvailabilityFromForm(formData)
+      disponibilidad
     };
+
+    const submitFormData = new FormData();
+    submitFormData.append("payload", JSON.stringify(payload));
+    submitFormData.append("siga", siga as File);
+    submitFormData.append("cv", cv as File);
 
     try {
       const response = await fetch("/api/postulacion", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
+        body: submitFormData
       });
 
       let result: ApiResponse | null = null;
@@ -354,7 +359,8 @@ export default function PostulacionPage() {
                   {BLOQUES.map((bloque) => (
                     <tr key={bloque.value}>
                       <td className="rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200">
-                        {bloque.label}
+                        <div>{bloque.label}</div>
+                        <div className="text-xs text-slate-500">{bloque.rango}</div>
                       </td>
                       {matrix[bloque.value].map((cell) => (
                         <td
@@ -378,12 +384,13 @@ export default function PostulacionPage() {
             <p className="mt-4 text-sm text-slate-500">
               Marca todos los bloques en que realmente podrías trabajar.
             </p>
+            {errors.disponibilidad && <p className="mt-2 text-sm text-red-600">{errors.disponibilidad}</p>}
           </section>
 
           <section className="card p-6">
             <h2 className="section-title mb-6">4. Documentos</h2>
 
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid gap-5 md:grid-cols-2">
               <div>
                 <label className="label" htmlFor="siga">
                   Resumen académico SIGA
@@ -404,19 +411,6 @@ export default function PostulacionPage() {
                 <input
                   id="cv"
                   name="cv"
-                  type="file"
-                  className="input file:mr-3 file:rounded-lg file:border-0 file:bg-ciac-light file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ciac-blue"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="label" htmlFor="horario">
-                  Disponibilidad horaria adicional
-                </label>
-                <input
-                  id="horario"
-                  name="horario"
                   type="file"
                   className="input file:mr-3 file:rounded-lg file:border-0 file:bg-ciac-light file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ciac-blue"
                   required

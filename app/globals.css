@@ -36,3 +36,20 @@ body {
 .section-title {
   @apply text-xl font-bold text-ciac-navy;
 }
+
+@media print {
+  :root {
+    --background: #ffffff;
+  }
+
+  body {
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 11px;
+  }
+
+  .card {
+    box-shadow: none;
+    border: 1px solid #cbd5e1;
+  }
+}
