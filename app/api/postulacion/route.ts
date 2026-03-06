@@ -43,6 +43,14 @@ function sanitizeFileName(name: string) {
     .toLowerCase();
 }
 
+function mapBloqueToLegacyNumericValue(bloque: string): number {
+  const [firstPart] = bloque.split("-");
+  if (bloque === "almuerzo") return 0;
+
+  const parsed = Number(firstPart);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 async function uploadDocument(
   postulacionId: number,
   tipoDocumento: string,
@@ -211,7 +219,19 @@ export async function POST(request: Request) {
       disponible: true
     }));
 
-    const { error: insertDisponibilidadError } = await supabase.from("disponibilidad_bloques").insert(rows);
+    let { error: insertDisponibilidadError } = await supabase.from("disponibilidad_bloques").insert(rows);
+
+    if (insertDisponibilidadError?.code === "22P02") {
+      const legacyRows = payload.disponibilidad.map((item) => ({
+        postulacion_id: postulacionId,
+        dia_semana: item.diaSemana,
+        bloque: mapBloqueToLegacyNumericValue(item.bloque),
+        disponible: true
+      }));
+
+      const fallbackInsert = await supabase.from("disponibilidad_bloques").insert(legacyRows);
+      insertDisponibilidadError = fallbackInsert.error;
+    }
 
     if (insertDisponibilidadError) {
       return NextResponse.json(
