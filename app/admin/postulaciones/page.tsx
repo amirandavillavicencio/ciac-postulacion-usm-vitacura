@@ -38,6 +38,7 @@ type PostulacionAdmin = {
   disponibilidad: DisponibilidadInfo[];
   documentos: DocumentoInfo[];
   rankingScore: number;
+  rankingAreaLabel: string;
 };
 
 const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"];
@@ -124,7 +125,13 @@ export default function AdminPostulacionesPage() {
     return [...postulaciones]
       .sort((a, b) => {
         if (b.rankingScore !== a.rankingScore) return b.rankingScore - a.rankingScore;
-        return a.id - b.id;
+
+        const nombreA = a.postulante?.nombreCompleto?.trim().toLocaleLowerCase("es-CL") ?? "";
+        const nombreB = b.postulante?.nombreCompleto?.trim().toLocaleLowerCase("es-CL") ?? "";
+
+        if (nombreA !== nombreB) return nombreA.localeCompare(nombreB, "es-CL");
+
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       })
       .map((item, index) => ({ ...item, position: index + 1 }));
   }, [postulaciones]);
@@ -477,7 +484,8 @@ export default function AdminPostulacionesPage() {
                   <th className="px-4 py-3">RUT</th>
                   <th className="px-4 py-3">Carrera</th>
                   <th className="px-4 py-3">Tipo</th>
-                  <th className="px-4 py-3">Puntaje (promedio)</th>
+                  <th className="px-4 py-3">Asignatura postulada</th>
+                  <th className="px-4 py-3">Nota utilizada</th>
                 </tr>
               </thead>
               <tbody>
@@ -488,6 +496,7 @@ export default function AdminPostulacionesPage() {
                     <td className="px-4 py-3">{item.postulante?.rut ?? "-"}</td>
                     <td className="px-4 py-3">{item.postulante?.carrera ?? "-"}</td>
                     <td className="px-4 py-3">{formatTipo(item.tipoPostulacion)}</td>
+                    <td className="px-4 py-3">{item.rankingAreaLabel === "Promedio de asignaturas" ? item.rankingAreaLabel : item.rankingAreaLabel ? formatArea(item.rankingAreaLabel) : "-"}</td>
                     <td className="px-4 py-3">{item.rankingScore > 0 ? item.rankingScore.toFixed(2) : "-"}</td>
                   </tr>
                 ))}
@@ -512,7 +521,8 @@ export default function AdminPostulacionesPage() {
                 <th className="border px-2 py-1">Fecha</th>
                 <th className="border px-2 py-1">Disponibilidad</th>
                 <th className="border px-2 py-1">Áreas</th>
-                <th className="border px-2 py-1">Ranking</th>
+                <th className="border px-2 py-1">Asignatura ranking</th>
+                <th className="border px-2 py-1">Nota ranking</th>
               </tr>
             </thead>
             <tbody>
@@ -539,6 +549,7 @@ export default function AdminPostulacionesPage() {
                     <td className="border px-2 py-1">{new Date(item.createdAt).toLocaleDateString("es-CL")}</td>
                     <td className="border px-2 py-1">{resumenDisponibilidad}</td>
                     <td className="border px-2 py-1">{item.areas.map((area) => formatArea(area.area)).join(", ") || "-"}</td>
+                    <td className="border px-2 py-1">{item.rankingAreaLabel === "Promedio de asignaturas" ? item.rankingAreaLabel : item.rankingAreaLabel ? formatArea(item.rankingAreaLabel) : "-"}</td>
                     <td className="border px-2 py-1">{item.rankingScore > 0 ? item.rankingScore.toFixed(2) : "-"}</td>
                   </tr>
                 );
