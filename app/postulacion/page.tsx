@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, Fragment, useMemo, useState } from "react";
 
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
 import {
@@ -48,6 +48,11 @@ const CARRERAS = [
 ];
 
 const SEMESTRES = Array.from({ length: 12 }, (_, index) => String(index + 1));
+const ALMUERZO_SEPARADOR = {
+  value: "almuerzo",
+  label: "ALMUERZO",
+  rango: "13:40 - 14:40"
+} as const;
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -340,28 +345,37 @@ export default function PostulacionPage() {
 
             <div className="space-y-3 md:hidden">
               {BLOQUES.map((bloque) => (
-                <article key={bloque.value} className="rounded-xl border border-slate-200 p-3">
-                  <p className="text-sm font-semibold text-slate-800">{bloque.label} ({bloque.rango})</p>
-                  <p className="mb-3 text-xs text-slate-500">Selecciona los días para este tramo.</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {matrix[bloque.value].map((cell) => (
-                      <label
-                        key={cell.key}
-                        htmlFor={cell.key}
-                        className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                      >
-                        <span>{DIAS_SEMANA.find((dia) => dia.value === cell.day)?.label ?? cell.day}</span>
-                        <input
-                          id={cell.key}
-                          type="checkbox"
-                          name={cell.key}
-                          value="true"
-                          className="h-5 w-5 rounded border-slate-300"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                </article>
+                <div key={bloque.value} className="space-y-3">
+                  <article className="rounded-xl border border-slate-200 p-3">
+                    <p className="text-sm font-semibold text-slate-800">{bloque.label} ({bloque.rango})</p>
+                    <p className="mb-3 text-xs text-slate-500">Selecciona los días para este tramo.</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {matrix[bloque.value].map((cell) => (
+                        <label
+                          key={cell.key}
+                          htmlFor={cell.key}
+                          className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                        >
+                          <span>{DIAS_SEMANA.find((dia) => dia.value === cell.day)?.label ?? cell.day}</span>
+                          <input
+                            id={cell.key}
+                            type="checkbox"
+                            name={cell.key}
+                            value="true"
+                            className="h-5 w-5 rounded border-slate-300"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </article>
+
+                  {bloque.value === "7-8" && (
+                    <article className="rounded-xl border border-dashed border-slate-300 bg-slate-100 px-4 py-5 text-center">
+                      <p className="text-sm font-bold uppercase tracking-wide text-slate-700">{ALMUERZO_SEPARADOR.label}</p>
+                      <p className="mt-1 text-sm text-slate-600">{ALMUERZO_SEPARADOR.rango}</p>
+                    </article>
+                  )}
+                </div>
               ))}
             </div>
 
@@ -384,24 +398,40 @@ export default function PostulacionPage() {
                 </thead>
                 <tbody>
                   {BLOQUES.map((bloque) => (
-                    <tr key={bloque.value}>
-                      <td className="rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200">
-                        <div>{bloque.label} ({bloque.rango})</div>
-                      </td>
-                      {matrix[bloque.value].map((cell) => (
-                        <td
-                          key={cell.key}
-                          className="rounded-xl bg-white px-4 py-3 text-center ring-1 ring-slate-200"
-                        >
-                          <input
-                            type="checkbox"
-                            name={cell.key}
-                            value="true"
-                            className="h-5 w-5 rounded border-slate-300"
-                          />
+                    <Fragment key={bloque.value}>
+                      <tr key={bloque.value}>
+                        <td className="rounded-xl bg-white px-4 py-3 text-sm font-medium text-slate-700 ring-1 ring-slate-200">
+                          <div>{bloque.label} ({bloque.rango})</div>
                         </td>
-                      ))}
-                    </tr>
+                        {matrix[bloque.value].map((cell) => (
+                          <td
+                            key={cell.key}
+                            className="rounded-xl bg-white px-4 py-3 text-center ring-1 ring-slate-200"
+                          >
+                            <input
+                              type="checkbox"
+                              name={cell.key}
+                              value="true"
+                              className="h-5 w-5 rounded border-slate-300"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+
+                      {bloque.value === "7-8" && (
+                        <tr key={ALMUERZO_SEPARADOR.value}>
+                          <td
+                            colSpan={DIAS_SEMANA.length + 1}
+                            className="rounded-xl border border-dashed border-slate-300 bg-slate-100 px-4 py-4 text-center"
+                          >
+                            <p className="text-sm font-bold uppercase tracking-wide text-slate-700">
+                              {ALMUERZO_SEPARADOR.label}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-600">{ALMUERZO_SEPARADOR.rango}</p>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
