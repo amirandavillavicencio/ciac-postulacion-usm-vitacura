@@ -177,25 +177,25 @@ export default function PostulacionPage() {
   }
 
   return (
-    <main className="py-10">
+    <main className="py-6 sm:py-8 md:py-10">
       <div className="container-page">
-        <div className="mb-8">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-ciac-blue">
+        <div className="mb-5 sm:mb-7 md:mb-8">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-ciac-blue sm:text-sm">
             CIAC USM Vitacura
           </p>
-          <h1 className="text-3xl font-bold text-ciac-navy md:text-4xl">
+          <h1 className="text-2xl font-bold text-ciac-navy sm:text-3xl md:text-4xl">
             Formulario de postulación
           </h1>
-          <p className="mt-3 max-w-3xl text-slate-600">
+          <p className="mt-2 max-w-3xl text-sm text-slate-600 sm:mt-3 sm:text-base">
             Completa el formulario para enviar tu postulación al CIAC.
           </p>
         </div>
 
-        <form className="space-y-8" onSubmit={handleSubmit}>
-          <section className="card p-6">
-            <h2 className="section-title mb-6">1. Datos personales</h2>
+        <form className="space-y-5 sm:space-y-6 md:space-y-8" onSubmit={handleSubmit}>
+          <section className="card p-4 sm:p-5 md:p-6">
+            <h2 className="section-title mb-4 text-lg sm:mb-5 sm:text-xl md:mb-6">1. Datos personales</h2>
 
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
               <div>
                 <label className="label" htmlFor="nombre">
                   Nombre completo
@@ -264,10 +264,10 @@ export default function PostulacionPage() {
             </div>
           </section>
 
-          <section className="card p-6">
-            <h2 className="section-title mb-6">2. Tipo de postulación</h2>
+          <section className="card p-4 sm:p-5 md:p-6">
+            <h2 className="section-title mb-4 text-lg sm:mb-5 sm:text-xl md:mb-6">2. Tipo de postulación</h2>
 
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
               <div>
                 <label className="label" htmlFor="tipoPostulacion">
                   Tipo
@@ -335,10 +335,37 @@ export default function PostulacionPage() {
             </div>
           </section>
 
-          <section className="card p-6">
-            <h2 className="section-title mb-6">3. Disponibilidad horaria</h2>
+          <section className="card p-4 sm:p-5 md:p-6">
+            <h2 className="section-title mb-4 text-lg sm:mb-5 sm:text-xl md:mb-6">3. Disponibilidad horaria</h2>
 
-            <div className="overflow-x-auto">
+            <div className="space-y-3 md:hidden">
+              {BLOQUES.map((bloque) => (
+                <article key={bloque.value} className="rounded-xl border border-slate-200 p-3">
+                  <p className="text-sm font-semibold text-slate-800">{bloque.label}</p>
+                  <p className="mb-3 text-xs text-slate-500">{bloque.rango}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {matrix[bloque.value].map((cell) => (
+                      <label
+                        key={cell.key}
+                        htmlFor={cell.key}
+                        className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      >
+                        <span>{DIAS_SEMANA.find((dia) => dia.value === cell.day)?.label ?? cell.day}</span>
+                        <input
+                          id={cell.key}
+                          type="checkbox"
+                          name={cell.key}
+                          value="true"
+                          className="h-5 w-5 rounded border-slate-300"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full border-separate border-spacing-2">
                 <thead>
                   <tr>
@@ -371,7 +398,7 @@ export default function PostulacionPage() {
                             type="checkbox"
                             name={cell.key}
                             value="true"
-                            className="h-4 w-4 rounded border-slate-300"
+                            className="h-5 w-5 rounded border-slate-300"
                           />
                         </td>
                       ))}
@@ -384,13 +411,13 @@ export default function PostulacionPage() {
             <p className="mt-4 text-sm text-slate-500">
               Marca todos los bloques en que realmente podrías trabajar.
             </p>
-            {errors.disponibilidad && <p className="mt-2 text-sm text-red-600">{errors.disponibilidad}</p>}
+            {errors.disponibilidad && <p className="mt-2 text-sm font-medium text-red-600">{errors.disponibilidad}</p>}
           </section>
 
-          <section className="card p-6">
-            <h2 className="section-title mb-6">4. Documentos</h2>
+          <section className="card p-4 sm:p-5 md:p-6">
+            <h2 className="section-title mb-4 text-lg sm:mb-5 sm:text-xl md:mb-6">4. Documentos</h2>
 
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
               <div>
                 <label className="label" htmlFor="siga">
                   Resumen académico SIGA
@@ -417,7 +444,7 @@ export default function PostulacionPage() {
                 />
               </div>
             </div>
-            {errors.documentos && <p className="mt-3 text-sm text-red-600">{errors.documentos}</p>}
+            {errors.documentos && <p className="mt-3 text-sm font-medium text-red-600">{errors.documentos}</p>}
           </section>
 
           {submitStatus !== "idle" && (
@@ -429,6 +456,7 @@ export default function PostulacionPage() {
                     ? "bg-red-50 text-red-700"
                     : "bg-slate-100 text-slate-700"
               }`}
+              aria-live="polite"
             >
               {submitStatus === "loading" ? "Enviando postulación..." : feedbackMessage}
 
@@ -440,18 +468,18 @@ export default function PostulacionPage() {
             </div>
           )}
 
-          <div className="flex flex-wrap gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
             <button
               type="submit"
               disabled={submitStatus === "loading"}
-              className="rounded-xl bg-ciac-blue px-6 py-3 font-semibold text-white transition hover:translate-y-[-1px] disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 rounded-xl bg-ciac-blue px-6 py-3 text-sm font-semibold text-white transition hover:translate-y-[-1px] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitStatus === "loading" ? "Enviando..." : "Enviar postulación"}
             </button>
             <button
               type="reset"
               disabled={submitStatus === "loading"}
-              className="rounded-xl border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="min-h-11 rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Limpiar formulario
             </button>
