@@ -36,18 +36,24 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
   }
 
   const raw = payload as Record<string, unknown>;
+  const nombreCompleto = raw.nombreCompleto ?? raw.nombre_completo;
+  const tipoPostulacion = raw.tipoPostulacion ?? raw.tipo_postulacion;
+  const prioridadAcademica = raw.prioridadAcademica ?? raw.prioridad_academica;
+  const notaAsignatura = raw.notaAsignatura ?? raw.nota_asignatura;
+  const diaSemanaKey = "diaSemana";
+  const diaSemanaSnakeKey = "dia_semana";
 
   const data: PostulacionPayload = {
-    nombreCompleto: toString(raw.nombreCompleto),
+    nombreCompleto: toString(nombreCompleto),
     rut: toString(raw.rut),
     correo: toString(raw.correo),
     telefono: toString(raw.telefono),
     carrera: toString(raw.carrera),
     semestre: toNumber(raw.semestre) ?? 0,
-    tipoPostulacion: toString(raw.tipoPostulacion) as PostulacionPayload["tipoPostulacion"],
+    tipoPostulacion: toString(tipoPostulacion) as PostulacionPayload["tipoPostulacion"],
     area: toString(raw.area) as PostulacionPayload["area"],
-    prioridadAcademica: toNumber(raw.prioridadAcademica) ?? 0,
-    notaAsignatura: toNumber(raw.notaAsignatura) ?? 0,
+    prioridadAcademica: toNumber(prioridadAcademica) ?? 0,
+    notaAsignatura: toNumber(notaAsignatura) ?? 0,
     experiencia: toString(raw.experiencia),
     motivacion: toString(raw.motivacion),
     disponibilidad: Array.isArray(raw.disponibilidad)
@@ -56,7 +62,7 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
             if (!item || typeof item !== "object") return null;
             const value = item as Record<string, unknown>;
             return {
-              diaSemana: toString(value.diaSemana),
+              diaSemana: toString(value[diaSemanaKey] ?? value[diaSemanaSnakeKey]),
               bloque: toNumber(value.bloque)
             };
           })
