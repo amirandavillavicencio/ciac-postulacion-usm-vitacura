@@ -69,6 +69,23 @@ function formatDay(day: string) {
   return match?.label ?? day;
 }
 
+function formatEstado(estado: string) {
+  return estado.charAt(0).toUpperCase() + estado.slice(1);
+}
+
+function getTipoBadgeClass(tipo: string) {
+  if (tipo === "academico") return "bg-blue-50 text-blue-700 ring-blue-200";
+  if (tipo === "administrativo") return "bg-violet-50 text-violet-700 ring-violet-200";
+  return "bg-slate-100 text-slate-700 ring-slate-200";
+}
+
+function getEstadoBadgeClass(estado: string) {
+  if (estado === "aceptada") return "bg-emerald-50 text-emerald-700 ring-emerald-200";
+  if (estado === "rechazada") return "bg-rose-50 text-rose-700 ring-rose-200";
+  if (estado === "en revisión") return "bg-amber-50 text-amber-700 ring-amber-200";
+  return "bg-slate-100 text-slate-700 ring-slate-200";
+}
+
 export default function AdminPostulacionesPage() {
   const [postulaciones, setPostulaciones] = useState<PostulacionAdmin[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -119,16 +136,19 @@ export default function AdminPostulacionesPage() {
     const total = postulaciones.length;
     const academicos = postulaciones.filter((item) => item.tipoPostulacion === "academico").length;
     const administrativos = postulaciones.filter((item) => item.tipoPostulacion === "administrativo").length;
+    const revision = postulaciones.filter((item) => item.estado === "en revisión").length;
 
     return [
-      { label: "Total postulantes", value: total },
-      { label: "Tutor académico", value: academicos },
-      { label: "Apoyo administrativo", value: administrativos }
+      { label: "Total general", value: total },
+      { label: "Tutores", value: academicos },
+      { label: "Administrativos", value: administrativos },
+      { label: "En revisión", value: revision }
     ];
   }, [postulaciones]);
 
   const ranking = useMemo(() => {
     return [...postulaciones]
+      .filter((item) => item.tipoPostulacion === "academico")
       .sort((a, b) => {
         if (b.rankingScore !== a.rankingScore) return b.rankingScore - a.rankingScore;
 
@@ -243,29 +263,33 @@ export default function AdminPostulacionesPage() {
   }
 
   return (
-    <main className="py-10">
-      <div className="container-page space-y-8 print:space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-4 print:hidden">
-          <div>
-            <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-ciac-blue">Panel interno</p>
-            <h1 className="text-3xl font-bold text-ciac-navy md:text-4xl">Postulaciones CIAC</h1>
-            <p className="mt-3 max-w-3xl text-slate-600">Revisión y gestión de postulantes en tiempo real.</p>
+    <main className="bg-slate-50/60 py-8 print:bg-white print:py-3">
+      <div className="container-page space-y-6 print:space-y-3">
+        <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm print:rounded-none print:border-none print:p-0 print:shadow-none">
+          <div className="flex flex-wrap items-end justify-between gap-4 print:hidden">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-ciac-blue">Panel interno CIAC</p>
+              <h1 className="text-2xl font-bold tracking-tight text-ciac-navy md:text-3xl">Gestión de postulantes</h1>
+              <p className="max-w-3xl text-sm text-slate-600 md:text-base">
+                Revisa postulaciones académicas y administrativas, filtra candidatos y actualiza su estado desde una vista operativa única.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-lg bg-ciac-blue px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ciac-navy"
+            >
+              Generar reporte PDF
+            </button>
           </div>
+        </header>
 
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="rounded-xl bg-ciac-blue px-5 py-3 font-semibold text-white"
-          >
-            Generar reporte PDF
-          </button>
-        </div>
-
-        <section className="grid gap-4 md:grid-cols-3 print:grid-cols-3">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 print:grid-cols-4">
           {kpis.map((item) => (
-            <article key={item.label} className="card p-5">
-              <p className="text-sm font-medium text-slate-500">{item.label}</p>
-              <p className="mt-3 text-3xl font-bold text-ciac-navy">{item.value}</p>
+            <article key={item.label} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+              <p className="mt-2 text-2xl font-bold text-ciac-navy">{item.value}</p>
             </article>
           ))}
         </section>
@@ -304,7 +328,36 @@ export default function AdminPostulacionesPage() {
         </section>
 
         <section className="card p-6 print:hidden">
-          <div className="mb-5 grid gap-4 md:grid-cols-5">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-ciac-navy">Postulaciones recibidas</h2>
+              <p className="text-sm text-slate-500">Selecciona una fila para ver el detalle completo del postulante.</p>
+            </div>
+
+            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+              {[
+                { value: "", label: "Todos" },
+                { value: "academico", label: "Tutores" },
+                { value: "administrativo", label: "Administrativos" }
+              ].map((tab) => {
+                const active = tipoFilter === tab.value;
+                return (
+                  <button
+                    key={tab.label}
+                    type="button"
+                    onClick={() => setTipoFilter(tab.value)}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                      active ? "bg-white text-ciac-navy shadow-sm" : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <input
               className="input"
               value={searchFilter}
@@ -312,10 +365,13 @@ export default function AdminPostulacionesPage() {
               placeholder="Buscar por nombre o RUT"
             />
 
-            <select className="input" value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value)}>
-              <option value="">Todos los tipos</option>
-              <option value="academico">Tutor académico</option>
-              <option value="administrativo">Apoyo administrativo</option>
+            <select className="input" value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)}>
+              <option value="">Todos los estados</option>
+              {ESTADOS.map((estado) => (
+                <option key={estado} value={estado}>
+                  {estado}
+                </option>
+              ))}
             </select>
 
             <select className="input" value={carreraFilter} onChange={(e) => setCarreraFilter(e.target.value)}>
@@ -327,16 +383,12 @@ export default function AdminPostulacionesPage() {
               ))}
             </select>
 
-            <select className="input" value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)}>
-              <option value="">Todos los estados</option>
-              {ESTADOS.map((estado) => (
-                <option key={estado} value={estado}>
-                  {estado}
-                </option>
-              ))}
-            </select>
-
-            <select className="input" value={asignaturaFilter} onChange={(e) => setAsignaturaFilter(e.target.value)}>
+            <select
+              className="input"
+              value={asignaturaFilter}
+              onChange={(e) => setAsignaturaFilter(e.target.value)}
+              disabled={tipoFilter === "administrativo"}
+            >
               <option value="">Todas las asignaturas</option>
               {asignaturas.map((asignatura) => (
                 <option key={asignatura} value={asignatura}>
@@ -346,39 +398,64 @@ export default function AdminPostulacionesPage() {
             </select>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full overflow-hidden rounded-2xl">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-full overflow-hidden bg-white text-sm">
               <thead>
-                <tr className="bg-slate-100 text-left text-sm text-slate-700">
-                  <th className="px-4 py-3">Nombre</th>
-                  <th className="px-4 py-3">RUT</th>
-                  <th className="px-4 py-3">Carrera</th>
-                  <th className="px-4 py-3">Semestre</th>
-                  <th className="px-4 py-3">Tipo de postulación</th>
-                  <th className="px-4 py-3">Asignatura postulada</th>
-                  <th className="px-4 py-3">Fecha de postulación</th>
+                <tr className="border-b border-slate-200 bg-slate-100/70 text-left text-xs uppercase tracking-wide text-slate-700">
+                  <th className="px-4 py-3">Postulante</th>
+                  <th className="px-4 py-3">Carrera / semestre</th>
+                  <th className="px-4 py-3">Tipo</th>
+                  <th className="px-4 py-3">Asignatura</th>
+                  <th className="px-4 py-3">Fecha</th>
                   <th className="px-4 py-3">Estado</th>
-                  <th className="px-4 py-3">Documentos</th>
+                  <th className="px-4 py-3 text-center">Docs</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="cursor-pointer border-t border-slate-200 bg-white text-sm hover:bg-slate-50"
-                    onClick={() => setSelectedId(item.id)}
-                  >
-                    <td className="px-4 py-3">{item.postulante?.nombreCompleto ?? "-"}</td>
-                    <td className="px-4 py-3">{item.postulante?.rut ?? "-"}</td>
-                    <td className="px-4 py-3">{item.postulante?.carrera ?? "-"}</td>
-                    <td className="px-4 py-3">{item.postulante?.semestre ?? "-"}</td>
-                    <td className="px-4 py-3">{formatTipo(item.tipoPostulacion)}</td>
-                    <td className="px-4 py-3">{item.areas.map((area) => formatArea(area.area)).join(", ") || "-"}</td>
-                    <td className="px-4 py-3">{new Date(item.createdAt).toLocaleDateString("es-CL")}</td>
-                    <td className="px-4 py-3">{item.estado}</td>
-                    <td className="px-4 py-3">{item.documentos.length}</td>
-                  </tr>
-                ))}
+                {filtered.map((item) => {
+                  const isSelected = selected?.id === item.id;
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`cursor-pointer border-t border-slate-100 align-top transition hover:bg-slate-50 ${isSelected ? "bg-blue-50/40" : "bg-white"}`}
+                      onClick={() => setSelectedId(item.id)}
+                    >
+                      <td className="px-4 py-3.5">
+                        <p className="font-semibold text-slate-900">{item.postulante?.nombreCompleto ?? "-"}</p>
+                        <p className="text-xs text-slate-500">{item.postulante?.rut ?? "-"}</p>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <p className="text-slate-700">{item.postulante?.carrera ?? "-"}</p>
+                        <p className="text-xs text-slate-500">Semestre: {item.postulante?.semestre ?? "-"}</p>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${getTipoBadgeClass(item.tipoPostulacion)}`}>
+                          {formatTipo(item.tipoPostulacion)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex flex-wrap gap-1.5">
+                          {item.areas.length === 0 && <span className="text-slate-500">-</span>}
+                          {item.areas.map((area) => (
+                            <span
+                              key={`${item.id}-${area.area}`}
+                              className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                            >
+                              {formatArea(area.area)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-600">{new Date(item.createdAt).toLocaleDateString("es-CL")}</td>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${getEstadoBadgeClass(item.estado)}`}>
+                          {formatEstado(item.estado)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-center font-semibold text-slate-700">{item.documentos.length}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -390,38 +467,52 @@ export default function AdminPostulacionesPage() {
           {!selected && <p className="text-sm text-slate-500">No hay postulaciones para los filtros seleccionados.</p>}
 
           {selected && (
-            <div className="space-y-4 text-sm text-slate-700">
-              <p><strong>Nombre:</strong> {selected.postulante?.nombreCompleto ?? "-"}</p>
-              <p><strong>RUT:</strong> {selected.postulante?.rut ?? "-"}</p>
-              <p><strong>Correo:</strong> {selected.postulante?.correo ?? "-"}</p>
-              <p><strong>Teléfono:</strong> {selected.postulante?.telefono ?? "-"}</p>
-              <p><strong>Carrera:</strong> {selected.postulante?.carrera ?? "-"}</p>
-              <p><strong>Semestre:</strong> {selected.postulante?.semestre ?? "-"}</p>
-              <p><strong>Tipo de postulación:</strong> {formatTipo(selected.tipoPostulacion)}</p>
-              <p><strong>Fecha de postulación:</strong> {new Date(selected.createdAt).toLocaleString("es-CL")}</p>
-              <p><strong>Motivación:</strong> {selected.motivacion || "-"}</p>
-              <p>
-                <strong>Áreas o asignaturas postuladas:</strong>{" "}
-                {selected.areas.map((area) => `${formatArea(area.area)}${area.notaAsignatura ? ` (${area.notaAsignatura.toFixed(1)})` : ""}`).join(", ") || "-"}
-              </p>
+            <div className="space-y-5 text-sm text-slate-700">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <article className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ciac-navy">Datos personales</h3>
+                  <div className="space-y-1.5">
+                    <p><strong>Nombre:</strong> {selected.postulante?.nombreCompleto ?? "-"}</p>
+                    <p><strong>RUT:</strong> {selected.postulante?.rut ?? "-"}</p>
+                    <p><strong>Correo:</strong> {selected.postulante?.correo ?? "-"}</p>
+                    <p><strong>Teléfono:</strong> {selected.postulante?.telefono ?? "-"}</p>
+                  </div>
+                </article>
 
-              <div>
-                <p className="mb-2"><strong>Disponibilidad resumida:</strong></p>
-                <ul className="list-inside list-disc space-y-1">
-                  {DIA_ORDEN.map((day) => (
-                    <li key={day}>
-                      {formatDay(day)}: {selectedByDay[day]?.length ? `tramos ${selectedByDay[day].join(", ")}` : "sin tramos"}
-                    </li>
-                  ))}
-                </ul>
+                <article className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ciac-navy">Datos académicos</h3>
+                  <div className="space-y-1.5">
+                    <p><strong>Carrera:</strong> {selected.postulante?.carrera ?? "-"}</p>
+                    <p><strong>Semestre:</strong> {selected.postulante?.semestre ?? "-"}</p>
+                    <p><strong>Tipo:</strong> {formatTipo(selected.tipoPostulacion)}</p>
+                    <p><strong>Asignaturas:</strong> {selected.areas.map((a) => formatArea(a.area)).join(", ") || "-"}</p>
+                    <p><strong>Fecha:</strong> {new Date(selected.createdAt).toLocaleString("es-CL")}</p>
+                  </div>
+                </article>
               </div>
 
-              <div>
-                <p className="mb-2"><strong>Calendario de disponibilidad:</strong></p>
-                <div className="overflow-x-auto">
+              <article className="rounded-xl border border-slate-200 p-4">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ciac-navy">Motivación</h3>
+                <p className="whitespace-pre-wrap text-slate-700">{selected.motivacion || "-"}</p>
+              </article>
+
+              <article className="rounded-xl border border-slate-200 p-4">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ciac-navy">Disponibilidad</h3>
+                <div className="mb-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {DIA_ORDEN.map((day) => (
+                    <div key={day} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{formatDay(day)}</p>
+                      <p className="mt-1 text-xs text-slate-700">
+                        {selectedByDay[day]?.length ? `Tramos ${selectedByDay[day].join(", ")}` : "Sin tramos"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border border-slate-200">
                   <table className="min-w-full border-collapse text-center text-xs">
                     <thead>
-                      <tr>
+                      <tr className="bg-slate-100">
                         <th className="border border-slate-300 px-2 py-2 text-left">Tramo</th>
                         {DIAS_SEMANA.map((dia) => (
                           <th key={dia.value} className="border border-slate-300 px-2 py-2">{dia.label}</th>
@@ -453,30 +544,37 @@ export default function AdminPostulacionesPage() {
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </article>
 
-              <div>
-                <p className="mb-2"><strong>Documentos:</strong></p>
-                {selected.documentos.length === 0 && <p>No hay documentos registrados.</p>}
+              <article className="rounded-xl border border-slate-200 p-4">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ciac-navy">Documentos</h3>
+                {selected.documentos.length === 0 && <p className="text-slate-500">No hay documentos registrados.</p>}
                 {selected.documentos.length > 0 && (
                   <ul className="space-y-2">
                     {selected.documentos.map((doc, index) => (
-                      <li key={`${doc.nombre}-${index}`} className="flex items-center gap-3">
-                        <span>{doc.tipo}: {doc.nombre}</span>
+                      <li key={`${doc.nombre}-${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                        <span className="text-slate-700">
+                          <strong className="font-semibold">{doc.tipo}:</strong> {doc.nombre}
+                        </span>
                         {doc.url ? (
-                          <a className="text-ciac-blue underline" href={doc.url} target="_blank" rel="noreferrer">
+                          <a
+                            className="inline-flex rounded-md border border-ciac-blue px-2.5 py-1 text-xs font-semibold text-ciac-blue transition hover:bg-ciac-blue hover:text-white"
+                            href={doc.url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
                             Ver documento
                           </a>
                         ) : (
-                          <span className="text-slate-500">Sin enlace</span>
+                          <span className="inline-flex rounded-md bg-slate-200 px-2.5 py-1 text-xs font-medium text-slate-600">Sin enlace</span>
                         )}
                       </li>
                     ))}
                   </ul>
                 )}
-              </div>
+              </article>
 
-              <div className="pt-2 print:hidden">
+              <div className="pt-1 print:hidden">
                 <label className="label" htmlFor="estado-select">
                   Estado de postulación
                 </label>
@@ -499,30 +597,39 @@ export default function AdminPostulacionesPage() {
         </section>
 
         <section className="card p-6 print:break-before-page">
-          <h2 className="section-title mb-4">Ranking de postulantes por nota</h2>
-          <div className="overflow-x-auto">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="section-title">Ranking de tutores por nota</h2>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Ordenado de mayor a menor puntaje</span>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="bg-slate-100 text-left">
+                <tr className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-700">
                   <th className="px-4 py-3">Posición</th>
                   <th className="px-4 py-3">Nombre</th>
                   <th className="px-4 py-3">RUT</th>
                   <th className="px-4 py-3">Carrera</th>
-                  <th className="px-4 py-3">Tipo</th>
-                  <th className="px-4 py-3">Asignatura postulada</th>
-                  <th className="px-4 py-3">Nota utilizada</th>
+                  <th className="px-4 py-3">Asignatura</th>
+                  <th className="px-4 py-3">Nota</th>
                 </tr>
               </thead>
               <tbody>
                 {ranking.map((item) => (
                   <tr key={item.id} className="border-t border-slate-200">
-                    <td className="px-4 py-3">{item.position}</td>
-                    <td className="px-4 py-3">{item.postulante?.nombreCompleto ?? "-"}</td>
-                    <td className="px-4 py-3">{item.postulante?.rut ?? "-"}</td>
-                    <td className="px-4 py-3">{item.postulante?.carrera ?? "-"}</td>
-                    <td className="px-4 py-3">{formatTipo(item.tipoPostulacion)}</td>
-                    <td className="px-4 py-3">{getRankingSubject(item)}</td>
-                    <td className="px-4 py-3">{item.rankingScore > 0 ? item.rankingScore.toFixed(2) : "-"}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex min-w-8 items-center justify-center rounded-full px-2 py-1 text-xs font-bold ${item.position <= 3 ? "bg-ciac-blue text-white" : "bg-slate-200 text-slate-700"}`}>
+                        #{item.position}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-slate-900">{item.postulante?.nombreCompleto ?? "-"}</td>
+                    <td className="px-4 py-3 text-slate-600">{item.postulante?.rut ?? "-"}</td>
+                    <td className="px-4 py-3 text-slate-700">{item.postulante?.carrera ?? "-"}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">{getRankingSubject(item)}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-base font-bold text-ciac-navy">{item.rankingScore > 0 ? item.rankingScore.toFixed(2) : "-"}</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -531,36 +638,36 @@ export default function AdminPostulacionesPage() {
         </section>
 
         <section className="hidden print:block">
-          <h2 className="mb-2 text-2xl font-bold text-ciac-navy">Reporte general de postulantes</h2>
+          <h2 className="mb-3 text-2xl font-bold text-ciac-navy">Reporte general de postulantes</h2>
           <table className="min-w-full border-collapse text-xs">
             <thead>
-              <tr>
-                <th className="border px-2 py-1">Nombre</th>
-                <th className="border px-2 py-1">RUT</th>
-                <th className="border px-2 py-1">Correo</th>
-                <th className="border px-2 py-1">Teléfono</th>
-                <th className="border px-2 py-1">Carrera</th>
-                <th className="border px-2 py-1">Semestre</th>
-                <th className="border px-2 py-1">Tipo</th>
-                <th className="border px-2 py-1">Estado</th>
-                <th className="border px-2 py-1">Fecha</th>
-                <th className="border px-2 py-1">Asignatura</th>
+              <tr className="bg-slate-100">
+                <th className="border border-slate-400 px-2 py-1.5">Nombre</th>
+                <th className="border border-slate-400 px-2 py-1.5">RUT</th>
+                <th className="border border-slate-400 px-2 py-1.5">Correo</th>
+                <th className="border border-slate-400 px-2 py-1.5">Teléfono</th>
+                <th className="border border-slate-400 px-2 py-1.5">Carrera</th>
+                <th className="border border-slate-400 px-2 py-1.5">Semestre</th>
+                <th className="border border-slate-400 px-2 py-1.5">Tipo</th>
+                <th className="border border-slate-400 px-2 py-1.5">Estado</th>
+                <th className="border border-slate-400 px-2 py-1.5">Fecha</th>
+                <th className="border border-slate-400 px-2 py-1.5">Asignatura</th>
               </tr>
             </thead>
             <tbody>
               {ranking.map((item) => (
-                  <tr key={`print-${item.id}`}>
-                    <td className="border px-2 py-1">{item.postulante?.nombreCompleto ?? "-"}</td>
-                    <td className="border px-2 py-1">{item.postulante?.rut ?? "-"}</td>
-                    <td className="border px-2 py-1">{item.postulante?.correo ?? "-"}</td>
-                    <td className="border px-2 py-1">{item.postulante?.telefono ?? "-"}</td>
-                    <td className="border px-2 py-1">{item.postulante?.carrera ?? "-"}</td>
-                    <td className="border px-2 py-1">{item.postulante?.semestre ?? "-"}</td>
-                    <td className="border px-2 py-1">{formatTipo(item.tipoPostulacion)}</td>
-                    <td className="border px-2 py-1">{item.estado}</td>
-                    <td className="border px-2 py-1">{new Date(item.createdAt).toLocaleDateString("es-CL")}</td>
-                    <td className="border px-2 py-1">{item.areas.map((area) => formatArea(area.area)).join(", ") || "-"}</td>
-                  </tr>
+                <tr key={`print-${item.id}`}>
+                  <td className="border border-slate-300 px-2 py-1">{item.postulante?.nombreCompleto ?? "-"}</td>
+                  <td className="border border-slate-300 px-2 py-1">{item.postulante?.rut ?? "-"}</td>
+                  <td className="border border-slate-300 px-2 py-1">{item.postulante?.correo ?? "-"}</td>
+                  <td className="border border-slate-300 px-2 py-1">{item.postulante?.telefono ?? "-"}</td>
+                  <td className="border border-slate-300 px-2 py-1">{item.postulante?.carrera ?? "-"}</td>
+                  <td className="border border-slate-300 px-2 py-1">{item.postulante?.semestre ?? "-"}</td>
+                  <td className="border border-slate-300 px-2 py-1">{formatTipo(item.tipoPostulacion)}</td>
+                  <td className="border border-slate-300 px-2 py-1">{formatEstado(item.estado)}</td>
+                  <td className="border border-slate-300 px-2 py-1">{new Date(item.createdAt).toLocaleDateString("es-CL")}</td>
+                  <td className="border border-slate-300 px-2 py-1">{item.areas.map((area) => formatArea(area.area)).join(", ") || "-"}</td>
+                </tr>
               ))}
             </tbody>
           </table>
