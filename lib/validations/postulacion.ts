@@ -1,5 +1,5 @@
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
-import { normalizeBloqueValue } from "@/lib/utils/availability";
+import { normalizeBloqueValue, normalizeDiaSemanaValue } from "@/lib/utils/availability";
 import type { BloqueDisponibilidad, PostulacionPayload } from "@/types/postulacion";
 
 type ValidationResult =
@@ -56,17 +56,14 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
             if (!item || typeof item !== "object") return null;
             const value = item as Record<string, unknown>;
             return {
-              diaSemana: toString(value.diaSemana),
+              diaSemana: normalizeDiaSemanaValue(value.diaSemana),
               bloque: normalizeBloqueValue(value.bloque)
             };
           })
-          .filter((item): item is { diaSemana: string; bloque: BloqueDisponibilidad } =>
-            Boolean(item && item.bloque !== null)
+          .filter((item): item is { diaSemana: PostulacionPayload["disponibilidad"][number]["diaSemana"]; bloque: BloqueDisponibilidad } =>
+            Boolean(item && item.diaSemana !== null && item.bloque !== null)
           )
-          .map((item) => ({
-            diaSemana: item.diaSemana as PostulacionPayload["disponibilidad"][number]["diaSemana"],
-            bloque: item.bloque
-          }))
+          .map((item) => ({ diaSemana: item.diaSemana, bloque: item.bloque }))
       : []
   };
 

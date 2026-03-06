@@ -1,5 +1,5 @@
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
-import type { BloqueDisponibilidad, DisponibilidadBloque } from "@/types/postulacion";
+import type { BloqueDisponibilidad, DiaSemana, DisponibilidadBloque } from "@/types/postulacion";
 
 type BloqueValue = (typeof BLOQUES)[number]["value"] & BloqueDisponibilidad;
 
@@ -7,6 +7,17 @@ type MatrixCell = {
   key: string;
   day: string;
   block: BloqueDisponibilidad;
+};
+
+const canonicalDays = new Set<DiaSemana>(DIAS_SEMANA.map((dia) => dia.value));
+
+const legacyDayMap: Record<string, DiaSemana> = {
+  lunes: "lunes",
+  martes: "martes",
+  miercoles: "miercoles",
+  "miércoles": "miercoles",
+  jueves: "jueves",
+  viernes: "viernes"
 };
 
 const legacyBlockMap: Record<string, BloqueValue> = {
@@ -44,6 +55,19 @@ export function normalizeBloqueValue(value: unknown): BloqueDisponibilidad | nul
   if (BLOQUES.some((bloque) => bloque.value === parsed)) return parsed as BloqueDisponibilidad;
   if (normalized === "almuerzo") return "almuerzo";
   return legacyBlockMap[parsed] ?? legacyBlockMap[normalized] ?? null;
+}
+
+export function normalizeDiaSemanaValue(value: unknown): DiaSemana | null {
+  if (typeof value !== "string") return null;
+
+  const parsed = value.trim();
+  if (!parsed) return null;
+
+  if (canonicalDays.has(parsed as DiaSemana)) {
+    return parsed as DiaSemana;
+  }
+
+  return legacyDayMap[parsed.toLowerCase()] ?? null;
 }
 
 export function sortBloques(a: string, b: string) {
