@@ -1,4 +1,5 @@
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
+import { normalizeBloqueValue } from "@/lib/utils/availability";
 import type { PostulacionPayload } from "@/types/postulacion";
 
 type ValidationResult =
@@ -6,7 +7,7 @@ type ValidationResult =
   | { success: false; error: string };
 
 const validDias = new Set(DIAS_SEMANA.map((dia) => dia.value));
-const validBloques: Set<number> = new Set(BLOQUES.map((bloque) => bloque.value));
+const validBloques: Set<string> = new Set(BLOQUES.map((bloque) => bloque.value));
 const validTipos = new Set(["academico", "administrativo"]);
 const validAreas = new Set([
   "matematica",
@@ -56,10 +57,10 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
             const value = item as Record<string, unknown>;
             return {
               diaSemana: toString(value.diaSemana),
-              bloque: toNumber(value.bloque)
+              bloque: normalizeBloqueValue(value.bloque)
             };
           })
-          .filter((item): item is { diaSemana: string; bloque: number } =>
+          .filter((item): item is { diaSemana: string; bloque: string } =>
             Boolean(item && item.bloque !== null)
           )
           .map((item) => ({
@@ -86,7 +87,7 @@ export function validatePostulacionPayload(payload: unknown): ValidationResult {
   }
 
   if (data.disponibilidad.length === 0) {
-    return { success: false, error: "Debes seleccionar al menos un bloque de disponibilidad." };
+    return { success: false, error: "Debes seleccionar al menos un tramo de disponibilidad." };
   }
 
   const disponibilidadValida = data.disponibilidad.every(
