@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { normalizeBloqueValue, sortBloques } from "@/lib/utils/availability";
+import { normalizeBloqueValue, normalizeDiaSemanaValue, sortBloques } from "@/lib/utils/availability";
 
 const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"] as const;
 
@@ -84,10 +84,11 @@ export async function GET() {
   const disponibilidadMap = new Map<number, { diaSemana: string; bloque: string }[]>();
   for (const item of disponibilidad ?? []) {
     const bloque = normalizeBloqueValue(item.bloque);
-    if (!bloque) continue;
+    const diaSemana = normalizeDiaSemanaValue(item.dia_semana);
+    if (!bloque || !diaSemana) continue;
 
     const list = disponibilidadMap.get(item.postulacion_id) ?? [];
-    list.push({ diaSemana: item.dia_semana, bloque });
+    list.push({ diaSemana, bloque });
     list.sort((a, b) => sortBloques(a.bloque, b.bloque));
     disponibilidadMap.set(item.postulacion_id, list);
   }

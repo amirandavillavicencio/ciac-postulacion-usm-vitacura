@@ -49,6 +49,18 @@ function mapBloqueToLegacyNumericValue(bloque: string): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function mapDiaSemanaToLegacyNumericValue(diaSemana: string): number {
+  const dayMap: Record<string, number> = {
+    lunes: 1,
+    martes: 2,
+    miercoles: 3,
+    jueves: 4,
+    viernes: 5
+  };
+
+  return dayMap[diaSemana] ?? 0;
+}
+
 async function uploadDocument(
   postulacionId: number,
   tipoDocumento: string,
@@ -220,7 +232,7 @@ export async function POST(request: Request) {
     if (insertDisponibilidadError?.code === "22P02") {
       const legacyRows = payload.disponibilidad.map((item) => ({
         postulacion_id: postulacionId,
-        dia_semana: item.diaSemana,
+        dia_semana: mapDiaSemanaToLegacyNumericValue(item.diaSemana),
         bloque: mapBloqueToLegacyNumericValue(item.bloque),
         disponible: true
       }));
