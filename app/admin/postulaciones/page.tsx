@@ -74,6 +74,7 @@ export default function AdminPostulacionesPage() {
   const [tipoFilter, setTipoFilter] = useState<string>("");
   const [carreraFilter, setCarreraFilter] = useState<string>("");
   const [estadoFilter, setEstadoFilter] = useState<string>("");
+  const [asignaturaFilter, setAsignaturaFilter] = useState<string>("");
   const [searchFilter, setSearchFilter] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
 
@@ -97,17 +98,21 @@ export default function AdminPostulacionesPage() {
       const tipoOk = tipoFilter ? item.tipoPostulacion === tipoFilter : true;
       const carreraOk = carreraFilter ? item.postulante?.carrera === carreraFilter : true;
       const estadoOk = estadoFilter ? item.estado === estadoFilter : true;
+      const asignaturaOk = asignaturaFilter
+        ? item.areas.some((area) => area.area === asignaturaFilter)
+        : true;
       const nombre = item.postulante?.nombreCompleto?.toLowerCase() ?? "";
       const rut = item.postulante?.rut?.toLowerCase() ?? "";
       const searchOk = term ? nombre.includes(term) || rut.includes(term) : true;
 
-      return tipoOk && carreraOk && estadoOk && searchOk;
+      return tipoOk && carreraOk && estadoOk && asignaturaOk && searchOk;
     });
-  }, [carreraFilter, estadoFilter, postulaciones, searchFilter, tipoFilter]);
+  }, [asignaturaFilter, carreraFilter, estadoFilter, postulaciones, searchFilter, tipoFilter]);
 
   const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0] ?? null;
 
   const carreras = [...new Set(postulaciones.map((item) => item.postulante?.carrera).filter(Boolean))] as string[];
+  const asignaturas = [...new Set(postulaciones.flatMap((item) => item.areas.map((area) => area.area)))];
 
   const kpis = useMemo(() => {
     const total = postulaciones.length;
@@ -129,12 +134,16 @@ export default function AdminPostulacionesPage() {
         const nombreA = a.postulante?.nombreCompleto?.trim().toLocaleLowerCase("es-CL") ?? "";
         const nombreB = b.postulante?.nombreCompleto?.trim().toLocaleLowerCase("es-CL") ?? "";
 
-        if (nombreA !== nombreB) return nombreA.localeCompare(nombreB, "es-CL");
-
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return nombreA.localeCompare(nombreB, "es-CL");
       })
       .map((item, index) => ({ ...item, position: index + 1 }));
   }, [postulaciones]);
+
+  function getRankingSubject(item: PostulacionAdmin) {
+    if (item.areas.length === 0) return "-";
+    if (item.areas.length === 1) return formatArea(item.areas[0].area);
+    return "Promedio simple";
+  }
 
   const analytics = useMemo(() => {
     const byTipo = {
@@ -291,7 +300,7 @@ export default function AdminPostulacionesPage() {
         </section>
 
         <section className="card p-6 print:hidden">
-          <div className="mb-5 grid gap-4 md:grid-cols-4">
+          <div className="mb-5 grid gap-4 md:grid-cols-5">
             <input
               className="input"
               value={searchFilter}
@@ -322,6 +331,15 @@ export default function AdminPostulacionesPage() {
                 </option>
               ))}
             </select>
+
+            <select className="input" value={asignaturaFilter} onChange={(e) => setAsignaturaFilter(e.target.value)}>
+              <option value="">Todas las asignaturas</option>
+              {asignaturas.map((asignatura) => (
+                <option key={asignatura} value={asignatura}>
+                  {formatArea(asignatura)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="overflow-x-auto">
@@ -333,8 +351,10 @@ export default function AdminPostulacionesPage() {
                   <th className="px-4 py-3">Carrera</th>
                   <th className="px-4 py-3">Semestre</th>
                   <th className="px-4 py-3">Tipo de postulación</th>
+                  <th className="px-4 py-3">Asignatura postulada</th>
                   <th className="px-4 py-3">Fecha de postulación</th>
                   <th className="px-4 py-3">Estado</th>
+                  <th className="px-4 py-3">Documentos</th>
                 </tr>
               </thead>
               <tbody>
@@ -349,8 +369,10 @@ export default function AdminPostulacionesPage() {
                     <td className="px-4 py-3">{item.postulante?.carrera ?? "-"}</td>
                     <td className="px-4 py-3">{item.postulante?.semestre ?? "-"}</td>
                     <td className="px-4 py-3">{formatTipo(item.tipoPostulacion)}</td>
+                    <td className="px-4 py-3">{item.areas.map((area) => formatArea(area.area)).join(", ") || "-"}</td>
                     <td className="px-4 py-3">{new Date(item.createdAt).toLocaleDateString("es-CL")}</td>
                     <td className="px-4 py-3">{item.estado}</td>
+                    <td className="px-4 py-3">{item.documentos.length}</td>
                   </tr>
                 ))}
               </tbody>
@@ -496,7 +518,7 @@ export default function AdminPostulacionesPage() {
                     <td className="px-4 py-3">{item.postulante?.rut ?? "-"}</td>
                     <td className="px-4 py-3">{item.postulante?.carrera ?? "-"}</td>
                     <td className="px-4 py-3">{formatTipo(item.tipoPostulacion)}</td>
-                    <td className="px-4 py-3">{item.rankingAreaLabel === "Promedio de asignaturas" ? item.rankingAreaLabel : item.rankingAreaLabel ? formatArea(item.rankingAreaLabel) : "-"}</td>
+                    <td className="px-4 py-3">{getRankingSubject(item)}</td>
                     <td className="px-4 py-3">{item.rankingScore > 0 ? item.rankingScore.toFixed(2) : "-"}</td>
                   </tr>
                 ))}
@@ -519,24 +541,11 @@ export default function AdminPostulacionesPage() {
                 <th className="border px-2 py-1">Tipo</th>
                 <th className="border px-2 py-1">Estado</th>
                 <th className="border px-2 py-1">Fecha</th>
-                <th className="border px-2 py-1">Disponibilidad</th>
-                <th className="border px-2 py-1">Áreas</th>
-                <th className="border px-2 py-1">Asignatura ranking</th>
-                <th className="border px-2 py-1">Nota ranking</th>
+                <th className="border px-2 py-1">Asignatura</th>
               </tr>
             </thead>
             <tbody>
-              {ranking.map((item) => {
-                const byDay = item.disponibilidad.reduce<Record<string, number[]>>((acc, disp) => {
-                  acc[disp.diaSemana] = [...(acc[disp.diaSemana] ?? []), disp.bloque].sort((a, b) => a - b);
-                  return acc;
-                }, {});
-
-                const resumenDisponibilidad = DIA_ORDEN
-                  .map((day) => `${formatDay(day)}: ${byDay[day]?.join(",") ?? "-"}`)
-                  .join(" | ");
-
-                return (
+              {ranking.map((item) => (
                   <tr key={`print-${item.id}`}>
                     <td className="border px-2 py-1">{item.postulante?.nombreCompleto ?? "-"}</td>
                     <td className="border px-2 py-1">{item.postulante?.rut ?? "-"}</td>
@@ -547,13 +556,9 @@ export default function AdminPostulacionesPage() {
                     <td className="border px-2 py-1">{formatTipo(item.tipoPostulacion)}</td>
                     <td className="border px-2 py-1">{item.estado}</td>
                     <td className="border px-2 py-1">{new Date(item.createdAt).toLocaleDateString("es-CL")}</td>
-                    <td className="border px-2 py-1">{resumenDisponibilidad}</td>
                     <td className="border px-2 py-1">{item.areas.map((area) => formatArea(area.area)).join(", ") || "-"}</td>
-                    <td className="border px-2 py-1">{item.rankingAreaLabel === "Promedio de asignaturas" ? item.rankingAreaLabel : item.rankingAreaLabel ? formatArea(item.rankingAreaLabel) : "-"}</td>
-                    <td className="border px-2 py-1">{item.rankingScore > 0 ? item.rankingScore.toFixed(2) : "-"}</td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </section>
