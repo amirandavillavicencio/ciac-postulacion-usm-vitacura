@@ -16,6 +16,8 @@ type ApiErrorDebug = {
   details?: string | null;
   hint?: string | null;
   code?: string | null;
+  step?: string | null;
+  stack?: string | null;
 };
 
 type ApiResponse = {
@@ -63,12 +65,18 @@ export default function PostulacionPage() {
         body: JSON.stringify(payload)
       });
 
-      const result = (await response.json()) as ApiResponse;
+      let result: ApiResponse | null = null;
+
+      try {
+        result = (await response.json()) as ApiResponse;
+      } catch {
+        result = null;
+      }
 
       if (!response.ok) {
         setSubmitStatus("error");
-        setFeedbackMessage(result.error ?? "No fue posible enviar la postulación.");
-        setDebugDetails(result.debug ?? null);
+        setFeedbackMessage(result?.error ?? "No fue posible enviar la postulación.");
+        setDebugDetails(result?.debug ?? null);
         return;
       }
 
@@ -76,10 +84,21 @@ export default function PostulacionPage() {
       setFeedbackMessage("¡Postulación enviada correctamente!");
       setDebugDetails(null);
       formElement.reset();
-    } catch {
+    } catch (error) {
       setSubmitStatus("error");
-      setFeedbackMessage("Error de red al enviar la postulación. Intenta nuevamente.");
-      setDebugDetails(null);
+      setFeedbackMessage(error instanceof Error ? error.message : "Error de red al enviar la postulación. Intenta nuevamente.");
+      setDebugDetails(
+        error instanceof Error
+          ? {
+              message: error.message,
+              details: null,
+              hint: null,
+              code: null,
+              step: "fetch",
+              stack: error.stack ?? null
+            }
+          : null
+      );
     }
   }
 
