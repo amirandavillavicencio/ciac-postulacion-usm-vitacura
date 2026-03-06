@@ -13,6 +13,7 @@ const legacyBlockMap: Record<string, BloqueValue> = {
   ALMUERZO: "almuerzo",
   Almuerzo: "almuerzo",
   almuerzo: "almuerzo",
+  "0": "almuerzo",
   "1": "1-2",
   "2": "1-2",
   "3": "3-4",
