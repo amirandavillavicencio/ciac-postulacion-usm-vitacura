@@ -245,7 +245,7 @@ export async function POST(request: Request) {
 
     if (sigaFile || cvFile) {
       step = "upload-documentos";
-      const bucket = process.env.SUPABASE_DOCUMENTS_BUCKET ?? "documentos-postulacion";
+      const bucket = process.env.SUPABASE_DOCUMENTS_BUCKET ?? "documentos_postulacion";
       const uploaded = (
         await Promise.all([
           uploadDocument(postulacionId, "resumen_siga", sigaFile as File, bucket),
