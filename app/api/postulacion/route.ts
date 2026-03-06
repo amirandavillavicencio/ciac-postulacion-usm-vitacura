@@ -14,11 +14,12 @@ export async function POST(request: Request) {
 
     const payload = validation.data;
     const supabase = getSupabaseServerClient();
+    const normalizedRut = payload.rut.trim();
 
     const { data: existingPostulante, error: existingPostulanteError } = await supabase
       .from("postulantes")
       .select("id")
-      .eq("rut", payload.rut)
+      .eq("rut", normalizedRut)
       .maybeSingle();
 
     const isPostulanteNotFound =
@@ -26,8 +27,23 @@ export async function POST(request: Request) {
       existingPostulanteError?.message.toLowerCase().includes("0 rows");
 
     if (existingPostulanteError && !isPostulanteNotFound) {
+      console.error("Error consultando postulante existente", {
+        message: existingPostulanteError.message,
+        details: existingPostulanteError.details,
+        hint: existingPostulanteError.hint,
+        code: existingPostulanteError.code
+      });
+
       return NextResponse.json(
-        { error: "No fue posible consultar postulante existente.", details: existingPostulanteError.message },
+        {
+          error: "No fue posible consultar postulante existente.",
+          debug: {
+            message: existingPostulanteError.message,
+            details: existingPostulanteError.details,
+            hint: existingPostulanteError.hint,
+            code: existingPostulanteError.code
+          }
+        },
         { status: 500 }
       );
     }
@@ -38,7 +54,7 @@ export async function POST(request: Request) {
       const { data: insertedPostulante, error: insertPostulanteError } = await supabase
         .from("postulantes")
         .insert({
-          rut: payload.rut,
+          rut: normalizedRut,
           nombre_completo: payload.nombreCompleto,
           correo: payload.correo,
           telefono: payload.telefono,

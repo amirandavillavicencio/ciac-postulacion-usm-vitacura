@@ -15,11 +15,18 @@ export default function PostulacionPage() {
   const matrix = useMemo(() => buildAvailabilityMatrix(), []);
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [feedbackMessage, setFeedbackMessage] = useState<string>("");
+  const [debugInfo, setDebugInfo] = useState<{
+    message?: string;
+    details?: string;
+    hint?: string;
+    code?: string;
+  } | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitStatus("loading");
     setFeedbackMessage("");
+    setDebugInfo(null);
 
     const formElement = event.currentTarget;
     const formData = new FormData(formElement);
@@ -49,20 +56,31 @@ export default function PostulacionPage() {
         body: JSON.stringify(payload)
       });
 
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as {
+        error?: string;
+        debug?: {
+          message?: string;
+          details?: string;
+          hint?: string;
+          code?: string;
+        };
+      };
 
       if (!response.ok) {
         setSubmitStatus("error");
         setFeedbackMessage(result.error ?? "No fue posible enviar la postulación.");
+        setDebugInfo(result.debug ?? null);
         return;
       }
 
       setSubmitStatus("success");
       setFeedbackMessage("¡Postulación enviada correctamente!");
+      setDebugInfo(null);
       formElement.reset();
     } catch {
       setSubmitStatus("error");
       setFeedbackMessage("Error de red al enviar la postulación. Intenta nuevamente.");
+      setDebugInfo(null);
     }
   }
 
@@ -313,6 +331,11 @@ export default function PostulacionPage() {
               }`}
             >
               {submitStatus === "loading" ? "Enviando postulación..." : feedbackMessage}
+              {submitStatus === "error" && debugInfo && (
+                <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded-lg bg-red-100 p-3 text-xs text-red-800">
+                  {JSON.stringify(debugInfo, null, 2)}
+                </pre>
+              )}
             </div>
           )}
 
