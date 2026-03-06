@@ -3,6 +3,27 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { validatePostulacionPayload } from "@/lib/validations/postulacion";
 
+type SupabaseDebugError = {
+  message: string;
+  details: string | null;
+  hint: string | null;
+  code: string | null;
+};
+
+function buildSupabaseDebugError(error: {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}): SupabaseDebugError {
+  return {
+    message: error.message,
+    details: error.details ?? null,
+    hint: error.hint ?? null,
+    code: error.code ?? null
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -19,11 +40,15 @@ export async function POST(request: Request) {
       .from("postulantes")
       .select("id")
       .eq("rut", payload.rut)
+      .limit(1)
       .maybeSingle();
 
-    if (existingPostulanteError) {
+    if (existingPostulanteError && existingPostulanteError.code !== "PGRST116") {
       return NextResponse.json(
-        { error: "No fue posible consultar postulante existente.", details: existingPostulanteError.message },
+        {
+          error: "No fue posible consultar postulante existente.",
+          debug: buildSupabaseDebugError(existingPostulanteError)
+        },
         { status: 500 }
       );
     }
@@ -46,7 +71,10 @@ export async function POST(request: Request) {
 
       if (insertPostulanteError) {
         return NextResponse.json(
-          { error: "No fue posible crear postulante.", details: insertPostulanteError.message },
+          {
+            error: "No fue posible crear postulante.",
+            debug: buildSupabaseDebugError(insertPostulanteError)
+          },
           { status: 500 }
         );
       }
@@ -67,7 +95,10 @@ export async function POST(request: Request) {
 
     if (insertPostulacionError) {
       return NextResponse.json(
-        { error: "No fue posible crear postulación.", details: insertPostulacionError.message },
+        {
+          error: "No fue posible crear postulación.",
+          debug: buildSupabaseDebugError(insertPostulacionError)
+        },
         { status: 500 }
       );
     }
@@ -83,7 +114,10 @@ export async function POST(request: Request) {
 
     if (insertAreaError) {
       return NextResponse.json(
-        { error: "No fue posible guardar el área de postulación.", details: insertAreaError.message },
+        {
+          error: "No fue posible guardar el área de postulación.",
+          debug: buildSupabaseDebugError(insertAreaError)
+        },
         { status: 500 }
       );
     }
@@ -103,7 +137,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: "No fue posible guardar la disponibilidad.",
-          details: insertDisponibilidadError.message
+          debug: buildSupabaseDebugError(insertDisponibilidadError)
         },
         { status: 500 }
       );
@@ -113,7 +147,15 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error interno";
     return NextResponse.json(
-      { error: "No fue posible procesar la postulación.", details: message },
+      {
+        error: "No fue posible procesar la postulación.",
+        debug: {
+          message,
+          details: null,
+          hint: null,
+          code: null
+        }
+      },
       { status: 500 }
     );
   }

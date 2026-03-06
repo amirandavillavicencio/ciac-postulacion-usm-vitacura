@@ -11,15 +11,29 @@ import type { PostulacionPayload } from "@/types/postulacion";
 
 type SubmitStatus = "idle" | "loading" | "success" | "error";
 
+type ApiErrorDebug = {
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+  code?: string | null;
+};
+
+type ApiResponse = {
+  error?: string;
+  debug?: ApiErrorDebug;
+};
+
 export default function PostulacionPage() {
   const matrix = useMemo(() => buildAvailabilityMatrix(), []);
   const [submitStatus, setSubmitStatus] = useState<SubmitStatus>("idle");
   const [feedbackMessage, setFeedbackMessage] = useState<string>("");
+  const [debugDetails, setDebugDetails] = useState<ApiErrorDebug | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitStatus("loading");
     setFeedbackMessage("");
+    setDebugDetails(null);
 
     const formElement = event.currentTarget;
     const formData = new FormData(formElement);
@@ -49,20 +63,23 @@ export default function PostulacionPage() {
         body: JSON.stringify(payload)
       });
 
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as ApiResponse;
 
       if (!response.ok) {
         setSubmitStatus("error");
         setFeedbackMessage(result.error ?? "No fue posible enviar la postulación.");
+        setDebugDetails(result.debug ?? null);
         return;
       }
 
       setSubmitStatus("success");
       setFeedbackMessage("¡Postulación enviada correctamente!");
+      setDebugDetails(null);
       formElement.reset();
     } catch {
       setSubmitStatus("error");
       setFeedbackMessage("Error de red al enviar la postulación. Intenta nuevamente.");
+      setDebugDetails(null);
     }
   }
 
@@ -313,6 +330,12 @@ export default function PostulacionPage() {
               }`}
             >
               {submitStatus === "loading" ? "Enviando postulación..." : feedbackMessage}
+
+              {submitStatus === "error" && debugDetails && (
+                <pre className="mt-3 overflow-x-auto rounded-lg bg-black/5 p-3 text-xs leading-relaxed">
+                  {JSON.stringify(debugDetails, null, 2)}
+                </pre>
+              )}
             </div>
           )}
 
