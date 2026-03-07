@@ -74,39 +74,45 @@ export async function GET() {
   }
 
   const postulantesMap = new Map((postulantes ?? []).map((item) => [item.id, item]));
-  const areasMap = new Map<number, { area: string; notaAsignatura: number | null }[]>();
+  const areasMap = new Map<string, { area: string; notaAsignatura: number | null }[]>();
   for (const item of areas ?? []) {
-    const list = areasMap.get(item.postulacion_id) ?? [];
+    const postulacionId = String(item.postulacion_id);
+    const list = areasMap.get(postulacionId) ?? [];
     list.push({ area: item.area, notaAsignatura: item.nota_asignatura });
-    areasMap.set(item.postulacion_id, list);
+    areasMap.set(postulacionId, list);
   }
 
-  const disponibilidadMap = new Map<number, { diaSemana: string; bloque: string }[]>();
+  const disponibilidadMap = new Map<string, { diaSemana: string; bloque: string }[]>();
   for (const item of disponibilidad ?? []) {
+    if (item.disponible === false) continue;
+
     const bloque = normalizeBloqueValue(item.bloque);
     const diaSemana = normalizeDiaSemanaValue(item.dia_semana);
     if (!bloque || !diaSemana) continue;
 
-    const list = disponibilidadMap.get(item.postulacion_id) ?? [];
+    const postulacionId = String(item.postulacion_id);
+    const list = disponibilidadMap.get(postulacionId) ?? [];
     list.push({ diaSemana, bloque });
     list.sort((a, b) => sortBloques(a.bloque, b.bloque));
-    disponibilidadMap.set(item.postulacion_id, list);
+    disponibilidadMap.set(postulacionId, list);
   }
 
-  const documentosMap = new Map<number, { tipo: string; nombre: string; url: string }[]>();
+  const documentosMap = new Map<string, { tipo: string; nombre: string; url: string }[]>();
   for (const item of docsResult.data ?? []) {
-    const list = documentosMap.get(item.postulacion_id) ?? [];
+    const postulacionId = String(item.postulacion_id);
+    const list = documentosMap.get(postulacionId) ?? [];
     list.push({
       tipo: item.tipo_documento ?? item.tipo ?? "Documento",
       nombre: item.nombre_archivo ?? item.nombre ?? "Archivo",
       url: item.file_url ?? item.url_publica ?? item.url ?? item.path ?? ""
     });
-    documentosMap.set(item.postulacion_id, list);
+    documentosMap.set(postulacionId, list);
   }
 
   const response = (postulaciones ?? []).map((item) => {
     const postulante = postulantesMap.get(item.postulante_id);
-    const areasData = areasMap.get(item.id) ?? [];
+    const postulacionId = String(item.id);
+    const areasData = areasMap.get(postulacionId) ?? [];
 
     const areasConNota = areasData.filter((entry): entry is { area: string; notaAsignatura: number } =>
       typeof entry.notaAsignatura === "number"
@@ -141,8 +147,8 @@ export async function GET() {
           }
         : null,
       areas: areasData,
-      disponibilidad: disponibilidadMap.get(item.id) ?? [],
-      documentos: documentosMap.get(item.id) ?? [],
+      disponibilidad: disponibilidadMap.get(postulacionId) ?? [],
+      documentos: documentosMap.get(postulacionId) ?? [],
       rankingScore,
       rankingAreaLabel
     };
