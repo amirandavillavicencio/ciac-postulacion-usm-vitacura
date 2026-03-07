@@ -110,6 +110,7 @@ export default function AdminPostulacionesPage() {
       if (!response.ok) return;
 
       const data = (await response.json()) as { data: PostulacionAdmin[] };
+      console.info("[admin/postulaciones] payload recibido", data.data);
       setPostulaciones(data.data);
       setSelectedId(data.data[0]?.id ?? null);
     }
