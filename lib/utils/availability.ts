@@ -20,6 +20,14 @@ const legacyDayMap: Record<string, DiaSemana> = {
   viernes: "viernes"
 };
 
+const legacyNumericDayMap: Record<string, DiaSemana> = {
+  "1": "lunes",
+  "2": "martes",
+  "3": "miercoles",
+  "4": "jueves",
+  "5": "viernes"
+};
+
 const legacyBlockMap: Record<string, BloqueValue> = {
   ALMUERZO: "almuerzo",
   Almuerzo: "almuerzo",
@@ -58,10 +66,18 @@ export function normalizeBloqueValue(value: unknown): BloqueDisponibilidad | nul
 }
 
 export function normalizeDiaSemanaValue(value: unknown): DiaSemana | null {
+  if (typeof value === "number") {
+    return legacyNumericDayMap[String(value)] ?? null;
+  }
+
   if (typeof value !== "string") return null;
 
   const parsed = value.trim();
   if (!parsed) return null;
+
+  if (legacyNumericDayMap[parsed]) {
+    return legacyNumericDayMap[parsed];
+  }
 
   if (canonicalDays.has(parsed as DiaSemana)) {
     return parsed as DiaSemana;
