@@ -11,6 +11,18 @@ function isMissingTableError(message?: string) {
   return typeof message === "string" && message.toLowerCase().includes("does not exist");
 }
 
+function isDisponibleValue(value: unknown) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "t" || normalized === "1";
+  }
+
+  return false;
+}
+
 export async function GET() {
   const supabase = getSupabaseServerClient();
 
@@ -49,7 +61,6 @@ export async function GET() {
           .from("disponibilidad_bloques")
           .select("postulacion_id,dia_semana,bloque,disponible")
           .in("postulacion_id", postulacionIds)
-          .eq("disponible", true)
       : Promise.resolve({ data: [], error: null }),
     postulacionIds.length > 0
       ? supabase.from("documentos_postulacion").select("*").in("postulacion_id", postulacionIds)
@@ -84,7 +95,7 @@ export async function GET() {
 
   const disponibilidadMap = new Map<string, { diaSemana: string; bloque: string }[]>();
   for (const item of disponibilidad ?? []) {
-    if (item.disponible === false) continue;
+    if (!isDisponibleValue(item.disponible)) continue;
 
     const bloque = normalizeBloqueValue(item.bloque);
     const diaSemana = normalizeDiaSemanaValue(item.dia_semana);
@@ -153,6 +164,15 @@ export async function GET() {
       rankingAreaLabel
     };
   });
+
+  console.info(
+    "[admin/postulaciones] Disponibilidad por postulación",
+    response.map((item) => ({
+      postulacionId: item.id,
+      disponibilidadCount: item.disponibilidad.length,
+      disponibilidad: item.disponibilidad
+    }))
+  );
 
   return NextResponse.json({ data: response });
 }
