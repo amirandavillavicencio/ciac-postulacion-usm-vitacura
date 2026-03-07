@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
-import { normalizeBloqueValue, sortBloques } from "@/lib/utils/availability";
+import { createXlsxBuffer, sanitizeSheetName, type ExcelCell, type ExcelSheet } from "@/lib/utils/xlsx";
 
 type AreaInfo = {
   area: string;
@@ -44,8 +44,6 @@ type PostulacionAdmin = {
 };
 
 const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"];
-const DIA_ORDEN = DIAS_SEMANA.map((item) => item.value);
-
 function formatTipo(tipo: string) {
   if (tipo === "academico") return "Tutor académico";
   if (tipo === "administrativo") return "Apoyo administrativo";
@@ -63,11 +61,6 @@ function formatArea(area: string) {
   };
 
   return map[area] ?? area;
-}
-
-function formatDay(day: string) {
-  const match = DIAS_SEMANA.find((item) => item.value === day);
-  return match?.label ?? day;
 }
 
 function formatEstado(estado: string) {
@@ -103,6 +96,7 @@ export default function AdminPostulacionesPage() {
   const [asignaturaFilter, setAsignaturaFilter] = useState<string>("");
   const [searchFilter, setSearchFilter] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     async function fetchPostulaciones() {
@@ -205,16 +199,7 @@ export default function AdminPostulacionesPage() {
       return acc;
     }, {});
 
-    const disponibilidadPorDia = postulaciones.reduce<Record<string, number>>((acc, item) => {
-      const uniqueDays = new Set(item.disponibilidad.map((disp) => disp.diaSemana));
-      for (const day of uniqueDays) {
-        const label = formatDay(day);
-        acc[label] = (acc[label] ?? 0) + 1;
-      }
-      return acc;
-    }, {});
-
-    return { byTipo, byCarrera, byArea, byEstado, bySemestre, disponibilidadPorDia };
+    return { byTipo, byCarrera, byArea, byEstado, bySemestre };
   }, [postulaciones]);
 
   async function handleStatusChange(id: number, estado: string) {
@@ -234,21 +219,168 @@ export default function AdminPostulacionesPage() {
     setUpdatingId(null);
   }
 
-  const selectedByDay = useMemo(() => {
-    if (!selected) return {} as Record<string, string[]>;
+  async function handleExportExcel() {
+    if (filtered.length === 0) return;
 
-    const grouped: Record<string, string[]> = {};
-    for (const day of DIA_ORDEN) grouped[day] = [];
+    setExporting(true);
 
-    for (const item of selected.disponibilidad) {
-      const bloque = normalizeBloqueValue(item.bloque);
-      if (!bloque) continue;
+    const list = [...filtered].sort((a, b) => {
+      if (tipoFilter === "academico") return b.rankingScore - a.rankingScore;
+      if (a.createdAt !== b.createdAt) return a.createdAt.localeCompare(b.createdAt);
+      const nameA = a.postulante?.nombreCompleto?.toLocaleLowerCase("es-CL") ?? "";
+      const nameB = b.postulante?.nombreCompleto?.toLocaleLowerCase("es-CL") ?? "";
+      return nameA.localeCompare(nameB, "es-CL");
+    });
 
-      grouped[item.diaSemana] = [...(grouped[item.diaSemana] ?? []), bloque].sort(sortBloques);
+    const summaryHeaders = [
+      "Nombre",
+      "RUT",
+      "Correo",
+      "Teléfono",
+      "Carrera",
+      "Semestre",
+      "Tipo de postulación",
+      "Asignatura postulada",
+      "Nota",
+      "Estado",
+      "Fecha de postulación"
+    ];
+
+    const summaryRows: ExcelCell[][] = [summaryHeaders.map((value) => ({ value, style: 1 }))];
+
+    for (const item of list) {
+      summaryRows.push([
+        { value: item.postulante?.nombreCompleto ?? "-" },
+        { value: item.postulante?.rut ?? "-" },
+        { value: item.postulante?.correo ?? "-" },
+        { value: item.postulante?.telefono ?? "-" },
+        { value: item.postulante?.carrera ?? "-" },
+        { value: item.postulante?.semestre ? String(item.postulante.semestre) : "-" },
+        { value: formatTipo(item.tipoPostulacion) },
+        { value: item.areas.map((area) => formatArea(area.area)).join(", ") || "-" },
+        {
+          value:
+            item.areas.length > 1
+              ? item.rankingScore.toFixed(2)
+              : item.areas[0]?.notaAsignatura?.toFixed(2) ?? "-"
+        },
+        { value: formatEstado(item.estado) },
+        { value: new Date(item.createdAt).toLocaleString("es-CL") }
+      ]);
     }
 
-    return grouped;
-  }, [selected]);
+    const sheets: ExcelSheet[] = [
+      {
+        name: "RESUMEN",
+        columns: [28, 16, 28, 16, 24, 12, 22, 28, 10, 16, 24],
+        rows: summaryRows
+      }
+    ];
+
+    const usedNames = new Set<string>(["RESUMEN"]);
+
+    for (const item of list) {
+      const disponibilidadSet = new Set(item.disponibilidad.map((entry) => `${entry.diaSemana}:${entry.bloque}`));
+      const rows: ExcelCell[][] = [];
+
+      const addSectionTitle = (title: string) => {
+        rows.push([{ value: title, style: 1 }]);
+      };
+
+      const addKeyValue = (label: string, value: string) => {
+        rows.push([{ value: label, style: 1 }, { value }]);
+      };
+
+      addSectionTitle("A. DATOS PERSONALES");
+      addKeyValue("Nombre", item.postulante?.nombreCompleto ?? "-");
+      addKeyValue("RUT", item.postulante?.rut ?? "-");
+      addKeyValue("Correo", item.postulante?.correo ?? "-");
+      addKeyValue("Teléfono", item.postulante?.telefono ?? "-");
+      rows.push([{ value: "" }]);
+
+      addSectionTitle("B. INFORMACIÓN ACADÉMICA");
+      addKeyValue("Carrera", item.postulante?.carrera ?? "-");
+      addKeyValue("Semestre", item.postulante?.semestre ? String(item.postulante.semestre) : "-");
+      addKeyValue("Tipo de postulación", formatTipo(item.tipoPostulacion));
+      addKeyValue("Asignatura postulada", item.areas.map((area) => formatArea(area.area)).join(", ") || "-");
+      addKeyValue(
+        "Nota",
+        item.areas.length > 1
+          ? `${item.rankingScore.toFixed(2)} (promedio)`
+          : item.areas[0]?.notaAsignatura?.toFixed(2) ?? "-"
+      );
+      rows.push([{ value: "" }]);
+
+      addSectionTitle("C. ESTADO DE POSTULACIÓN");
+      addKeyValue("Estado actual", formatEstado(item.estado));
+      addKeyValue("Fecha de postulación", new Date(item.createdAt).toLocaleString("es-CL"));
+      rows.push([{ value: "" }]);
+
+      addSectionTitle("D. DISPONIBILIDAD HORARIA");
+      rows.push([
+        { value: "Bloque", style: 1 },
+        ...DIAS_SEMANA.map((dia) => ({ value: dia.label, style: 1 }))
+      ]);
+
+      for (const bloque of BLOQUES) {
+        rows.push([
+          { value: `${bloque.label} (${bloque.rango})`, style: 1 },
+          ...DIAS_SEMANA.map((dia) => ({
+            value: disponibilidadSet.has(`${dia.value}:${bloque.value}`) ? "✔" : ""
+          }))
+        ]);
+      }
+
+      rows.push([{ value: "" }]);
+      addSectionTitle("E. DOCUMENTOS");
+      rows.push([
+        { value: "Tipo de documento", style: 1 },
+        { value: "Nombre de archivo", style: 1 },
+        { value: "URL / referencia", style: 1 }
+      ]);
+
+      if (item.documentos.length === 0) {
+        rows.push([{ value: "Sin documentos" }, { value: "-" }, { value: "-" }]);
+      } else {
+        for (const doc of item.documentos) {
+          rows.push([{ value: doc.tipo }, { value: doc.nombre || "-" }, { value: doc.url || "-" }]);
+        }
+      }
+
+      const rawName = `${item.postulante?.nombreCompleto?.split(" ")[0] ?? "Postulante"} ${item.postulante?.rut ?? item.id}`;
+      let sheetName = sanitizeSheetName(rawName);
+      let suffix = 2;
+
+      while (usedNames.has(sheetName)) {
+        sheetName = sanitizeSheetName(`${rawName} ${suffix}`);
+        suffix += 1;
+      }
+
+      usedNames.add(sheetName);
+
+      sheets.push({
+        name: sheetName,
+        columns: [30, 28, 42, 42, 42, 42],
+        rows
+      });
+    }
+
+    const fileBytes = createXlsxBuffer(sheets);
+    const blob = new Blob([fileBytes], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const suffix = tipoFilter === "academico" ? "tutores" : tipoFilter === "administrativo" ? "administrativos" : "general";
+    anchor.href = href;
+    anchor.download = `postulaciones_${suffix}.xlsx`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(href);
+    setExporting(false);
+  }
 
   function renderBars(data: Record<string, number>) {
     const entries = Object.entries(data);
@@ -297,10 +429,11 @@ export default function AdminPostulacionesPage() {
 
             <button
               type="button"
-              onClick={() => window.print()}
-              className="rounded-lg bg-ciac-blue px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ciac-navy"
+              onClick={handleExportExcel}
+              disabled={exporting || filtered.length === 0}
+              className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Generar reporte PDF
+              {exporting ? "Exportando..." : "Exportar Excel (.xlsx)"}
             </button>
           </div>
         </header>
@@ -339,10 +472,6 @@ export default function AdminPostulacionesPage() {
             <div>
               <h3 className="mb-2 font-semibold text-ciac-navy">Postulaciones por semestre</h3>
               {renderBars(analytics.bySemestre)}
-            </div>
-            <div>
-              <h3 className="mb-2 font-semibold text-ciac-navy">Disponibilidad por día</h3>
-              {renderBars(analytics.disponibilidadPorDia)}
             </div>
           </div>
         </section>
@@ -530,52 +659,9 @@ export default function AdminPostulacionesPage() {
 
               <article className="rounded-xl border border-slate-200 p-4">
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ciac-navy">Disponibilidad</h3>
-                <div className="mb-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                  {DIA_ORDEN.map((day) => (
-                    <div key={day} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{formatDay(day)}</p>
-                      <p className="mt-1 text-xs text-slate-700">
-                        {selectedByDay[day]?.length ? `Tramos ${selectedByDay[day].join(", ")}` : "Sin tramos"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="min-w-full border-collapse text-center text-xs">
-                    <thead>
-                      <tr className="bg-slate-100/90">
-                        <th className="border border-slate-300 px-2 py-2 text-left">Tramo</th>
-                        {DIAS_SEMANA.map((dia) => (
-                          <th key={dia.value} className="border border-slate-300 px-2 py-2">{dia.label}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {BLOQUES.map((bloque) => (
-                        <tr key={bloque.value}>
-                          <td className="border border-slate-300 px-2 py-2 text-left">
-                            {bloque.label} ({bloque.rango})
-                          </td>
-                          {DIAS_SEMANA.map((dia) => {
-                            const isSelected = selected.disponibilidad.some(
-                              (item) => item.diaSemana === dia.value && normalizeBloqueValue(item.bloque) === bloque.value
-                            );
-
-                            return (
-                              <td
-                                key={`${dia.value}-${bloque.value}`}
-                                className={`border border-slate-300 px-2 py-2 ${isSelected ? "bg-blue-50 font-semibold text-ciac-blue" : "bg-white"}`}
-                              >
-                                {isSelected ? "✔" : ""}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <p className="text-sm text-slate-600">
+                  El detalle completo de disponibilidad horaria se exporta en el archivo Excel por cada postulante.
+                </p>
               </article>
 
               <article className="rounded-xl border border-slate-200 p-4">
