@@ -227,7 +227,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Datos inválidos para actualizar estado." }, { status: 400 });
   }
 
-  const supabase = getAdminSupabaseClient();
+  const supabase = getSupabaseServerClient();
 
   const { error } = await supabase
     .from("postulaciones")
