@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseServerClient, getSupabaseServerClientMeta } from "@/lib/supabase/server";
 import { normalizeBloqueValue, normalizeDiaSemanaValue, sortBloques } from "@/lib/utils/availability";
 
 const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"] as const;
@@ -24,7 +24,12 @@ function isDisponibleValue(value: unknown) {
 }
 
 export async function GET() {
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServerClient({ useServiceRole: true });
+  const supabaseMeta = getSupabaseServerClientMeta({ useServiceRole: true });
+  console.info("[admin/postulaciones] supabase client meta:", {
+    keyType: supabaseMeta.keyType,
+    projectRef: supabaseMeta.projectRef
+  });
 
   const { data: postulaciones, error: postulacionesError } = await supabase
     .from("postulaciones")
@@ -32,11 +37,15 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (postulacionesError) {
+    console.error("[admin/postulaciones] postulaciones error:", postulacionesError);
     return NextResponse.json({ error: postulacionesError.message }, { status: 500 });
   }
 
+  console.info("[admin/postulaciones] postulaciones count:", postulaciones?.length ?? 0);
+
   const postulanteIds = [...new Set((postulaciones ?? []).map((item) => item.postulante_id))].filter(Boolean);
   const postulacionIds = (postulaciones ?? []).map((item) => item.id);
+  console.info("[admin/postulaciones] postulacionIds:", postulacionIds);
 
   const [
     { data: postulantes, error: postulantesError },
@@ -68,6 +77,10 @@ export async function GET() {
   ]);
 
   if (postulantesError || areasError || disponibilidadError) {
+    if (postulantesError) console.error("[admin/postulaciones] postulantes error:", postulantesError);
+    if (areasError) console.error("[admin/postulaciones] areas error:", areasError);
+    if (disponibilidadError) console.error("[admin/postulaciones] disponibilidad error:", disponibilidadError);
+
     return NextResponse.json(
       {
         error:
@@ -78,6 +91,15 @@ export async function GET() {
       },
       { status: 500 }
     );
+  }
+
+  console.info("[admin/postulaciones] disponibilidad rows count:", disponibilidad?.length ?? 0);
+  if (disponibilidadError) {
+    console.error("[admin/postulaciones] disponibilidadError full:", disponibilidadError);
+  } else if (!disponibilidad || disponibilidad.length === 0) {
+    console.warn("[admin/postulaciones] disponibilidad query returned empty without error");
+  } else {
+    console.info("[admin/postulaciones] disponibilidad sample:", disponibilidad.slice(0, 10));
   }
 
   if (docsResult.error && !isMissingTableError(docsResult.error.message)) {
@@ -107,6 +129,8 @@ export async function GET() {
     list.sort((a, b) => sortBloques(a.bloque, b.bloque));
     disponibilidadMap.set(postulacionId, list);
   }
+
+  console.info("[admin/postulaciones] disponibilidadMap keys:", [...disponibilidadMap.keys()].slice(0, 10));
 
   const documentosMap = new Map<string, { tipo: string; nombre: string; url: string }[]>();
   for (const item of docsResult.data ?? []) {
@@ -166,11 +190,10 @@ export async function GET() {
   });
 
   console.info(
-    "[admin/postulaciones] Disponibilidad por postulación",
-    response.map((item) => ({
+    "[admin/postulaciones] response summary:",
+    response.slice(0, 50).map((item) => ({
       postulacionId: item.id,
-      disponibilidadCount: item.disponibilidad.length,
-      disponibilidad: item.disponibilidad
+      disponibilidadCount: item.disponibilidad.length
     }))
   );
 
@@ -184,7 +207,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Datos inválidos para actualizar estado." }, { status: 400 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServerClient({ useServiceRole: true });
 
   const { error } = await supabase
     .from("postulaciones")
