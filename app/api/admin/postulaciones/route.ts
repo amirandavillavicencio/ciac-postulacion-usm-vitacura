@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSupabaseServerClient, getSupabaseServerClientMeta } from "@/lib/supabase/server";
-import { normalizeBloqueValue, normalizeDiaSemanaValue, sortBloques } from "@/lib/utils/availability";
+import { sortBloques } from "@/lib/utils/availability";
 
 const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"] as const;
 
@@ -23,13 +23,65 @@ function isDisponibleValue(value: unknown) {
   return false;
 }
 
+function normalizeDiaSemanaDirect(value: unknown): string | undefined {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  const diaMap: Record<string, string> = {
+    lunes: "lunes",
+    martes: "martes",
+    miercoles: "miercoles",
+    miércoles: "miercoles",
+    jueves: "jueves",
+    viernes: "viernes",
+    sabado: "sabado",
+    sábado: "sabado",
+    domingo: "domingo",
+    "1": "lunes",
+    "2": "martes",
+    "3": "miercoles",
+    "4": "jueves",
+    "5": "viernes",
+    "6": "sabado",
+    "7": "domingo"
+  };
+
+  return diaMap[raw];
+}
+
+function normalizeBloqueDirect(value: unknown): string | undefined {
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
+  const bloqueMap: Record<string, string> = {
+    "1": "1-2",
+    "2": "3-4",
+    "3": "5-6",
+    "4": "7-8",
+    "5": "9-10",
+    "6": "11-12",
+    "7": "13-14",
+    "1-2": "1-2",
+    "3-4": "3-4",
+    "5-6": "5-6",
+    "7-8": "7-8",
+    "9-10": "9-10",
+    "11-12": "11-12",
+    "13-14": "13-14"
+  };
+
+  return bloqueMap[raw];
+}
+
 export async function GET() {
   const supabase = getSupabaseServerClient({ useServiceRole: true });
-  const supabaseMeta = getSupabaseServerClientMeta({ useServiceRole: true });
-  console.info("[admin/postulaciones] supabase client meta:", {
-    keyType: supabaseMeta.keyType,
-    projectRef: supabaseMeta.projectRef
-  });
+
+  console.info(
+    "[admin/postulaciones] Supabase client",
+    getSupabaseServerClientMeta({ useServiceRole: true })
+  );
 
   const { data: postulaciones, error: postulacionesError } = await supabase
     .from("postulaciones")
@@ -37,15 +89,11 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (postulacionesError) {
-    console.error("[admin/postulaciones] postulaciones error:", postulacionesError);
     return NextResponse.json({ error: postulacionesError.message }, { status: 500 });
   }
 
-  console.info("[admin/postulaciones] postulaciones count:", postulaciones?.length ?? 0);
-
   const postulanteIds = [...new Set((postulaciones ?? []).map((item) => item.postulante_id))].filter(Boolean);
   const postulacionIds = (postulaciones ?? []).map((item) => item.id);
-  console.info("[admin/postulaciones] postulacionIds:", postulacionIds);
 
   const [
     { data: postulantes, error: postulantesError },
@@ -77,10 +125,6 @@ export async function GET() {
   ]);
 
   if (postulantesError || areasError || disponibilidadError) {
-    if (postulantesError) console.error("[admin/postulaciones] postulantes error:", postulantesError);
-    if (areasError) console.error("[admin/postulaciones] areas error:", areasError);
-    if (disponibilidadError) console.error("[admin/postulaciones] disponibilidad error:", disponibilidadError);
-
     return NextResponse.json(
       {
         error:
@@ -93,18 +137,17 @@ export async function GET() {
     );
   }
 
-  console.info("[admin/postulaciones] disponibilidad rows count:", disponibilidad?.length ?? 0);
-  if (!disponibilidad || disponibilidad.length === 0) {
-    console.warn("[admin/postulaciones] disponibilidad query returned empty without error");
-  } else {
-    console.info("[admin/postulaciones] disponibilidad sample:", disponibilidad.slice(0, 10));
-  }
-
   if (docsResult.error && !isMissingTableError(docsResult.error.message)) {
     return NextResponse.json({ error: docsResult.error.message }, { status: 500 });
   }
 
+  console.info("[admin/postulaciones] disponibilidad rows", {
+    count: disponibilidad?.length ?? 0,
+    sample: (disponibilidad ?? []).slice(0, 10)
+  });
+
   const postulantesMap = new Map((postulantes ?? []).map((item) => [item.id, item]));
+
   const areasMap = new Map<string, { area: string; notaAsignatura: number | null }[]>();
   for (const item of areas ?? []) {
     const postulacionId = String(item.postulacion_id);
@@ -114,12 +157,24 @@ export async function GET() {
   }
 
   const disponibilidadMap = new Map<string, { diaSemana: string; bloque: string }[]>();
+
   for (const item of disponibilidad ?? []) {
     if (!isDisponibleValue(item.disponible)) continue;
 
-    const bloque = normalizeBloqueValue(item.bloque);
-    const diaSemana = normalizeDiaSemanaValue(item.dia_semana);
-    if (!bloque || !diaSemana) continue;
+    const diaSemana = normalizeDiaSemanaDirect(item.dia_semana);
+    const bloque = normalizeBloqueDirect(item.bloque);
+
+    if (!diaSemana || !bloque) {
+      console.info("[admin/postulaciones] disponibilidad descartada", {
+        postulacionId: item.postulacion_id,
+        dia_semana: item.dia_semana,
+        bloque: item.bloque,
+        disponible: item.disponible,
+        diaSemanaNormalizado: diaSemana,
+        bloqueNormalizado: bloque
+      });
+      continue;
+    }
 
     const postulacionId = String(item.postulacion_id);
     const list = disponibilidadMap.get(postulacionId) ?? [];
@@ -127,8 +182,6 @@ export async function GET() {
     list.sort((a, b) => sortBloques(a.bloque, b.bloque));
     disponibilidadMap.set(postulacionId, list);
   }
-
-  console.info("[admin/postulaciones] disponibilidadMap keys:", [...disponibilidadMap.keys()].slice(0, 10));
 
   const documentosMap = new Map<string, { tipo: string; nombre: string; url: string }[]>();
   for (const item of docsResult.data ?? []) {
@@ -147,8 +200,9 @@ export async function GET() {
     const postulacionId = String(item.id);
     const areasData = areasMap.get(postulacionId) ?? [];
 
-    const areasConNota = areasData.filter((entry): entry is { area: string; notaAsignatura: number } =>
-      typeof entry.notaAsignatura === "number"
+    const areasConNota = areasData.filter(
+      (entry): entry is { area: string; notaAsignatura: number } =>
+        typeof entry.notaAsignatura === "number"
     );
 
     const rankingScore =
@@ -188,10 +242,11 @@ export async function GET() {
   });
 
   console.info(
-    "[admin/postulaciones] response summary:",
-    response.slice(0, 50).map((item) => ({
+    "[admin/postulaciones] Disponibilidad por postulación",
+    response.map((item) => ({
       postulacionId: item.id,
-      disponibilidadCount: item.disponibilidad.length
+      disponibilidadCount: item.disponibilidad.length,
+      disponibilidad: item.disponibilidad
     }))
   );
 
