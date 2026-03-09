@@ -107,19 +107,32 @@ export function buildAvailabilityMatrix(): Record<string, MatrixCell[]> {
 }
 
 export function getSelectedAvailabilityFromForm(formData: FormData): DisponibilidadBloque[] {
-  const matrix = buildAvailabilityMatrix();
   const selected: DisponibilidadBloque[] = [];
+  const seen = new Set<string>();
 
-  for (const bloque of BLOQUES) {
-    for (const cell of matrix[bloque.value]) {
-      if (formData.get(cell.key)) {
-        selected.push({
-          diaSemana: cell.day as DisponibilidadBloque["diaSemana"],
-          bloque: cell.block as BloqueDisponibilidad
-        });
-      }
-    }
+  for (const [key] of formData.entries()) {
+    if (!key.startsWith("disp_")) continue;
+
+    const [, rawDay, rawBlock] = key.split("_");
+    const diaSemana = normalizeDiaSemanaValue(rawDay);
+    const bloque = normalizeBloqueValue(rawBlock);
+
+    if (!diaSemana || !bloque) continue;
+
+    const availabilityKey = `${diaSemana}:${bloque}`;
+    if (seen.has(availabilityKey)) continue;
+
+    seen.add(availabilityKey);
+    selected.push({ diaSemana, bloque });
   }
+
+  selected.sort((a, b) => {
+    if (a.diaSemana === b.diaSemana) {
+      return sortBloques(a.bloque, b.bloque);
+    }
+
+    return DIAS_SEMANA.findIndex((dia) => dia.value === a.diaSemana) - DIAS_SEMANA.findIndex((dia) => dia.value === b.diaSemana);
+  });
 
   return selected;
 }
