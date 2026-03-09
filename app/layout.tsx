@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "CIAC USM Vitacura",
-  description: "Sistema de postulación y gestión de postulantes CIAC"
+  title: "CIAC Content Classifier",
+  description: "Clasificador de contenidos para migración del Aula CIAC"
 };
 
 export default function RootLayout({
