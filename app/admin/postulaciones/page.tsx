@@ -320,7 +320,91 @@ export default function AdminPostulacionesPage() {
       }
     ];
 
-    const usedNames = new Set<string>(["RESUMEN"]);
+    const normalizeText = (value: string) =>
+      value
+        .toLocaleLowerCase("es-CL")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/['’`´]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const excludedNamePatterns = ["test", "andres miranda"];
+
+    const adminCoverageBase = list.filter((item) => {
+      if (item.tipoPostulacion !== "administrativo") return false;
+
+      const normalizedName = normalizeText(item.postulante?.nombreCompleto ?? "");
+
+      return !excludedNamePatterns.some((pattern) => normalizedName.includes(pattern));
+    });
+
+    const uniqueCoverageKeys = new Set<string>();
+    const coverageCounter = new Map<string, number>();
+
+    for (const item of adminCoverageBase) {
+      const identityRaw = item.postulante?.rut?.trim() || item.postulante?.nombreCompleto?.trim() || "sin-identidad";
+      const identity = normalizeText(identityRaw);
+
+      for (const entry of item.disponibilidad) {
+        const day = entry.diaSemana;
+        const block = entry.bloque;
+        const dedupeKey = `${identity}|${day}|${block}`;
+
+        if (uniqueCoverageKeys.has(dedupeKey)) continue;
+        uniqueCoverageKeys.add(dedupeKey);
+
+        const matrixKey = `${day}|${block}`;
+        coverageCounter.set(matrixKey, (coverageCounter.get(matrixKey) ?? 0) + 1);
+      }
+    }
+
+    const coverageRows: ExcelCell[][] = [];
+    coverageRows.push([{ value: "Informe de cobertura administrativa", style: 1 }]);
+    coverageRows.push([{ value: "Análisis de disponibilidad de postulantes - CIAC USM Vitacura" }]);
+    coverageRows.push([{ value: "" }]);
+
+    coverageRows.push([{ value: "Resumen ejecutivo", style: 1 }]);
+    coverageRows.push([{ value: "Se analizó la disponibilidad real de postulantes de apoyo administrativo." }]);
+    coverageRows.push([{ value: "La cobertura no es homogénea entre bloques y días." }]);
+    coverageRows.push([{ value: "Existen tramos con mayor concentración y otros con menor cobertura." }]);
+    coverageRows.push([
+      {
+        value:
+          "Por ello conviene seleccionar un número algo mayor al mínimo operativo para asegurar continuidad, flexibilidad y reemplazos."
+      }
+    ]);
+    coverageRows.push([{ value: "" }]);
+
+    coverageRows.push([{ value: "Matriz de cobertura por bloque y día", style: 1 }]);
+    coverageRows.push([
+      { value: "Bloque", style: 1 },
+      ...DIAS_SEMANA.map((dia) => ({ value: dia.label, style: 1 }))
+    ]);
+
+    for (const bloque of BLOQUES) {
+      coverageRows.push([
+        { value: `${bloque.label} (${bloque.rango})`, style: 1 },
+        ...DIAS_SEMANA.map((dia) => ({ value: coverageCounter.get(`${dia.value}|${bloque.value}`) ?? 0 }))
+      ]);
+    }
+
+    coverageRows.push([{ value: "" }]);
+    coverageRows.push([{ value: "Recomendación final", style: 1 }]);
+    coverageRows.push([
+      {
+        value:
+          "Aunque existe una base de postulantes, la cobertura se concentra en ciertos bloques. Seleccionar algo más que el mínimo mejora la continuidad operativa y permite cubrir vacíos, ausencias y ajustes de turno durante el semestre."
+      }
+    ]);
+
+    sheets.push({
+      name: "INFORME COBERTURA ADMIN",
+      columns: [40, 14, 14, 14, 14, 14],
+      rows: coverageRows
+    });
+
+    const usedNames = new Set<string>(["RESUMEN", "INFORME COBERTURA ADMIN"]);
 
     for (const item of list) {
       const disponibilidadSet = new Set(item.disponibilidad.map((entry) => `${entry.diaSemana}:${entry.bloque}`));
