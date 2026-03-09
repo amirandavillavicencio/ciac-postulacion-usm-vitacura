@@ -52,7 +52,7 @@ const legacyBlockMap: Record<string, BloqueValue> = {
 const blockOrder = new Map<BloqueValue, number>(BLOQUES.map((bloque, index) => [bloque.value, index]));
 
 export function normalizeBloqueValue(value: unknown): BloqueDisponibilidad | null {
-  if (typeof value !== "string" && typeof value !== "number") {
+  if (typeof value !== "string" && typeof value !== "number" && typeof value !== "bigint") {
     return null;
   }
 
@@ -62,6 +62,12 @@ export function normalizeBloqueValue(value: unknown): BloqueDisponibilidad | nul
 
   if (BLOQUES.some((bloque) => bloque.value === parsed)) return parsed as BloqueDisponibilidad;
   if (normalized === "almuerzo") return "almuerzo";
+
+  if (/^\d+$/.test(parsed)) {
+    const directNumericBlock = BLOQUES.find((bloque) => bloque.value === parsed);
+    if (directNumericBlock) return directNumericBlock.value as BloqueDisponibilidad;
+  }
+
   return legacyBlockMap[parsed] ?? legacyBlockMap[normalized] ?? null;
 }
 
