@@ -131,6 +131,10 @@ export default function AdminPostulacionesPage() {
   }, [asignaturaFilter, carreraFilter, estadoFilter, postulaciones, searchFilter, tipoFilter]);
 
   const selected = filtered.find((item) => item.id === selectedId) ?? filtered[0] ?? null;
+  const selectedDisponibilidadSet = useMemo(
+    () => new Set((selected?.disponibilidad ?? []).map((entry) => `${entry.diaSemana}:${entry.bloque}`)),
+    [selected]
+  );
 
   const carreras = [...new Set(postulaciones.map((item) => item.postulante?.carrera).filter(Boolean))] as string[];
   const asignaturas = [...new Set(postulaciones.flatMap((item) => item.areas.map((area) => area.area)))];
@@ -659,9 +663,37 @@ export default function AdminPostulacionesPage() {
 
               <article className="rounded-xl border border-slate-200 p-4">
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-ciac-navy">Disponibilidad</h3>
-                <p className="text-sm text-slate-600">
-                  El detalle completo de disponibilidad horaria se exporta en el archivo Excel por cada postulante.
-                </p>
+                {selected.disponibilidad.length === 0 && <p className="text-sm text-slate-500">Sin disponibilidad registrada.</p>}
+                {selected.disponibilidad.length > 0 && (
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="min-w-[640px] text-xs sm:text-sm">
+                      <thead>
+                        <tr className="bg-slate-100 text-left font-semibold text-slate-700">
+                          <th className="px-3 py-2">Bloque</th>
+                          {DIAS_SEMANA.map((dia) => (
+                            <th key={`disp-head-${dia.value}`} className="px-3 py-2 text-center">
+                              {dia.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {BLOQUES.map((bloque) => (
+                          <tr key={`disp-row-${bloque.value}`} className="border-t border-slate-200">
+                            <td className="px-3 py-2 font-medium text-slate-700">
+                              {bloque.label} <span className="text-slate-500">({bloque.rango})</span>
+                            </td>
+                            {DIAS_SEMANA.map((dia) => (
+                              <td key={`disp-cell-${dia.value}-${bloque.value}`} className="px-3 py-2 text-center text-base font-bold text-emerald-600">
+                                {selectedDisponibilidadSet.has(`${dia.value}:${bloque.value}`) ? "✔" : ""}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </article>
 
               <article className="rounded-xl border border-slate-200 p-4">
