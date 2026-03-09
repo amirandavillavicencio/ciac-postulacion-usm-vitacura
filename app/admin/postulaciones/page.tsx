@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
@@ -470,14 +471,24 @@ export default function AdminPostulacionesPage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              disabled={exporting || filtered.length === 0}
-              className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {exporting ? "Exportando..." : "Exportar Excel (.xlsx)"}
-            </button>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Link
+                href="/admin/postulantes/informe-administrativo"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-ciac-blue bg-white px-4 py-2.5 text-sm font-semibold text-ciac-blue transition hover:bg-blue-50"
+              >
+                Generar informe cobertura admin
+              </Link>
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                disabled={exporting || filtered.length === 0}
+                className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {exporting ? "Exportando..." : "Exportar Excel (.xlsx)"}
+              </button>
+            </div>
           </div>
         </header>
 
