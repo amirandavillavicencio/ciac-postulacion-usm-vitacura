@@ -96,6 +96,8 @@ export default function AdminPostulacionesPage() {
   const [asignaturaFilter, setAsignaturaFilter] = useState<string>("");
   const [searchFilter, setSearchFilter] = useState<string>("");
   const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string>("");
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -221,6 +223,43 @@ export default function AdminPostulacionesPage() {
     }
 
     setUpdatingId(null);
+  }
+
+  async function handleDeletePostulacion(id: number) {
+    const isConfirmed = window.confirm("¿Seguro que quieres eliminar esta postulación? Esta acción no se puede deshacer.");
+    if (!isConfirmed) return;
+
+    const clave = window.prompt("Ingresa la clave para confirmar eliminación:")?.trim() ?? "";
+
+    if (!clave) {
+      setDeleteError("Debes ingresar la clave para eliminar la postulación.");
+      return;
+    }
+
+    setDeleteError("");
+    setDeletingId(id);
+
+    const response = await fetch("/api/admin/postulaciones", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, clave })
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+
+    if (!response.ok) {
+      setDeleteError(payload.error ?? "No fue posible eliminar la postulación.");
+      setDeletingId(null);
+      return;
+    }
+
+    setPostulaciones((current) => {
+      const next = current.filter((item) => item.id !== id);
+      const stillSelected = next.some((item) => item.id === selectedId);
+      setSelectedId(stillSelected ? selectedId : (next[0]?.id ?? null));
+      return next;
+    });
+    setDeletingId(null);
   }
 
   async function handleExportExcel() {
@@ -742,6 +781,18 @@ export default function AdminPostulacionesPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="pt-2 print:hidden">
+                <button
+                  type="button"
+                  className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={deletingId === selected.id}
+                  onClick={() => handleDeletePostulacion(selected.id)}
+                >
+                  {deletingId === selected.id ? "Eliminando..." : "Eliminar postulación"}
+                </button>
+                {deleteError ? <p className="mt-2 text-sm text-rose-600">{deleteError}</p> : null}
               </div>
             </div>
           )}
