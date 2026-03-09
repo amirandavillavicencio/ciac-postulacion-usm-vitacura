@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseServerClient, getSupabaseServiceRoleClient } from "@/lib/supabase/server";
 import { normalizeBloqueValue, normalizeDiaSemanaValue, sortBloques } from "@/lib/utils/availability";
 
 const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"] as const;
@@ -23,8 +23,34 @@ function isDisponibleValue(value: unknown) {
   return false;
 }
 
+function getAdminSupabaseClient() {
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.info("[admin/postulaciones] supabase client: service_role");
+    return getSupabaseServiceRoleClient();
+  }
+
+  console.warn("[admin/postulaciones] supabase client: anon (SUPABASE_SERVICE_ROLE_KEY missing)");
+  return getSupabaseServerClient();
+}
+
+function getSupabaseProjectRef(url?: string) {
+  if (!url) return null;
+
+  try {
+    return new URL(url).hostname.split(".")[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
-  const supabase = getSupabaseServerClient();
+  console.info("[admin/postulaciones] supabase env", {
+    projectRef: getSupabaseProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    hasAnonKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY)
+  });
+
+  const supabase = getAdminSupabaseClient();
 
   const { data: postulaciones, error: postulacionesError } = await supabase
     .from("postulaciones")
@@ -32,11 +58,16 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (postulacionesError) {
+    console.error("[admin/postulaciones] postulaciones error", postulacionesError);
     return NextResponse.json({ error: postulacionesError.message }, { status: 500 });
   }
 
+  console.info("[admin/postulaciones] postulaciones count:", postulaciones?.length ?? 0);
+
   const postulanteIds = [...new Set((postulaciones ?? []).map((item) => item.postulante_id))].filter(Boolean);
   const postulacionIds = (postulaciones ?? []).map((item) => item.id);
+
+  console.info("[admin/postulaciones] postulacionIds:", postulacionIds);
 
   const [
     { data: postulantes, error: postulantesError },
@@ -66,6 +97,17 @@ export async function GET() {
       ? supabase.from("documentos_postulacion").select("*").in("postulacion_id", postulacionIds)
       : Promise.resolve({ data: [], error: null })
   ]);
+
+  if (disponibilidadError) {
+    console.error("[admin/postulaciones] disponibilidad error:", disponibilidadError);
+  }
+
+  if (!disponibilidadError && (disponibilidad?.length ?? 0) === 0) {
+    console.warn("[admin/postulaciones] disponibilidad rows empty without error");
+  }
+
+  console.info("[admin/postulaciones] disponibilidad rows count:", disponibilidad?.length ?? 0);
+  console.info("[admin/postulaciones] disponibilidad sample:", (disponibilidad ?? []).slice(0, 10));
 
   if (postulantesError || areasError || disponibilidadError) {
     return NextResponse.json(
@@ -107,6 +149,8 @@ export async function GET() {
     list.sort((a, b) => sortBloques(a.bloque, b.bloque));
     disponibilidadMap.set(postulacionId, list);
   }
+
+  console.info("[admin/postulaciones] disponibilidadMap keys:", [...disponibilidadMap.keys()].slice(0, 10));
 
   const documentosMap = new Map<string, { tipo: string; nombre: string; url: string }[]>();
   for (const item of docsResult.data ?? []) {
@@ -166,11 +210,10 @@ export async function GET() {
   });
 
   console.info(
-    "[admin/postulaciones] Disponibilidad por postulación",
-    response.map((item) => ({
+    "[admin/postulaciones] response summary:",
+    response.slice(0, 10).map((item) => ({
       postulacionId: item.id,
-      disponibilidadCount: item.disponibilidad.length,
-      disponibilidad: item.disponibilidad
+      disponibilidadCount: item.disponibilidad.length
     }))
   );
 
@@ -184,7 +227,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Datos inválidos para actualizar estado." }, { status: 400 });
   }
 
-  const supabase = getSupabaseServerClient();
+  const supabase = getAdminSupabaseClient();
 
   const { error } = await supabase
     .from("postulaciones")
