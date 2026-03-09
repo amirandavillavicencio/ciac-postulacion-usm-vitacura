@@ -4,7 +4,11 @@ type ServerClientOptions = {
   useServiceRole?: boolean;
 };
 
-function getSupabaseServerConfig({ useServiceRole = false }: ServerClientOptions = {}) {
+function getSupabaseServerConfig({ useServiceRole = false }: ServerClientOptions = {}): {
+  supabaseUrl: string;
+  supabaseKey: string;
+  keyType: "service_role" | "anon";
+} {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -15,9 +19,11 @@ function getSupabaseServerConfig({ useServiceRole = false }: ServerClientOptions
 
   const shouldUseServiceRole = useServiceRole && Boolean(supabaseServiceRoleKey);
 
+  const supabaseKey = shouldUseServiceRole ? supabaseServiceRoleKey! : supabaseAnonKey;
+
   return {
     supabaseUrl,
-    supabaseKey: shouldUseServiceRole ? supabaseServiceRoleKey : supabaseAnonKey,
+    supabaseKey,
     keyType: shouldUseServiceRole ? "service_role" : "anon"
   };
 }
@@ -25,7 +31,7 @@ function getSupabaseServerConfig({ useServiceRole = false }: ServerClientOptions
 export function getSupabaseServerClient(options: ServerClientOptions = {}) {
   const { supabaseUrl, supabaseKey } = getSupabaseServerConfig(options);
 
-  return createClient(supabaseUrl, supabaseKey!, {
+  return createClient(supabaseUrl, supabaseKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false

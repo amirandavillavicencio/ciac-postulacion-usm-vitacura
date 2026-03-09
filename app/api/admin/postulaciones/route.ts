@@ -94,9 +94,7 @@ export async function GET() {
   }
 
   console.info("[admin/postulaciones] disponibilidad rows count:", disponibilidad?.length ?? 0);
-  if (disponibilidadError) {
-    console.error("[admin/postulaciones] disponibilidadError full:", disponibilidadError);
-  } else if (!disponibilidad || disponibilidad.length === 0) {
+  if (!disponibilidad || disponibilidad.length === 0) {
     console.warn("[admin/postulaciones] disponibilidad query returned empty without error");
   } else {
     console.info("[admin/postulaciones] disponibilidad sample:", disponibilidad.slice(0, 10));
