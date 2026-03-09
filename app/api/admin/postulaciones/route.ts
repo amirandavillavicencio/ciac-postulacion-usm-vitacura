@@ -7,6 +7,8 @@ import {
 import { sortBloques } from "@/lib/utils/availability";
 
 const ESTADOS = ["recibida", "en revisión", "aceptada", "rechazada"] as const;
+const DELETE_PASSWORD = "Suna2060";
+const DOCUMENTOS_BUCKET = "documentos_postulacion";
 
 type EstadoPostulacion = (typeof ESTADOS)[number];
 
@@ -24,6 +26,15 @@ type DocumentoItem = {
   tipo: string;
   nombre: string;
   url: string;
+};
+
+type DocumentoDeleteRecord = {
+  file_url?: string | null;
+  url_publica?: string | null;
+  url?: string | null;
+  path?: string | null;
+  file_path?: string | null;
+  ruta?: string | null;
 };
 
 function isMissingTableError(message?: string) {
@@ -89,6 +100,40 @@ function normalizeBloqueDirect(value: unknown): string | undefined {
   };
 
   return bloqueMap[raw];
+}
+
+function deriveStoragePath(value: string, bucket: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+    const directPath = trimmed.replace(/^\/+/, "");
+    const bucketPrefix = `${bucket}/`;
+    return directPath.startsWith(bucketPrefix) ? directPath.slice(bucketPrefix.length) : directPath;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const marker = `/storage/v1/object/public/${bucket}/`;
+    const encodedMarker = `/storage/v1/object/public/${bucket}%2F`;
+
+    if (url.pathname.includes(marker)) {
+      return decodeURIComponent(url.pathname.split(marker)[1] ?? "");
+    }
+
+    if (url.pathname.includes(encodedMarker)) {
+      return decodeURIComponent(url.pathname.split(encodedMarker)[1] ?? "");
+    }
+
+    const genericMarker = `/storage/v1/object/public/`;
+    if (!url.pathname.includes(genericMarker)) return null;
+
+    const fullPath = decodeURIComponent(url.pathname.split(genericMarker)[1] ?? "").replace(/^\/+/, "");
+    const bucketPrefix = `${bucket}/`;
+    return fullPath.startsWith(bucketPrefix) ? fullPath.slice(bucketPrefix.length) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET() {
@@ -299,6 +344,96 @@ export async function PATCH(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(request: Request) {
+  const body = (await request.json()) as { id?: number; clave?: string };
+  const postulacionId = Number(body?.id);
+
+  if (!Number.isInteger(postulacionId) || postulacionId <= 0 || !body?.clave) {
+    return NextResponse.json({ error: "Datos inválidos para eliminar postulación." }, { status: 400 });
+  }
+
+  if (body.clave !== DELETE_PASSWORD) {
+    return NextResponse.json({ error: "Clave incorrecta." }, { status: 403 });
+  }
+
+  const supabase = getSupabaseServerClient({ useServiceRole: true });
+
+  const { data: documentos, error: documentosError } = await supabase
+    .from("documentos_postulacion")
+    .select("file_url,url_publica,url,path,file_path,ruta")
+    .eq("postulacion_id", postulacionId);
+
+  if (documentosError && !isMissingTableError(documentosError.message)) {
+    return NextResponse.json({ error: documentosError.message }, { status: 500 });
+  }
+
+  const storagePaths = new Set<string>();
+  for (const documento of (documentos ?? []) as DocumentoDeleteRecord[]) {
+    const candidates = [
+      documento.path,
+      documento.file_path,
+      documento.ruta,
+      documento.file_url,
+      documento.url_publica,
+      documento.url,
+    ];
+
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const path = deriveStoragePath(candidate, DOCUMENTOS_BUCKET);
+      if (path) storagePaths.add(path);
+    }
+  }
+
+  if (storagePaths.size > 0) {
+    const { error: storageError } = await supabase.storage
+      .from(DOCUMENTOS_BUCKET)
+      .remove([...storagePaths]);
+
+    if (storageError) {
+      console.warn("[admin/postulaciones] No fue posible eliminar archivos de storage", {
+        postulacionId,
+        error: storageError.message,
+      });
+    }
+  }
+
+  const { error: disponibilidadError } = await supabase
+    .from("disponibilidad_bloques")
+    .delete()
+    .eq("postulacion_id", postulacionId);
+
+  if (disponibilidadError) {
+    return NextResponse.json({ error: disponibilidadError.message }, { status: 500 });
+  }
+
+  const { error: areasError } = await supabase
+    .from("postulacion_areas")
+    .delete()
+    .eq("postulacion_id", postulacionId);
+
+  if (areasError) {
+    return NextResponse.json({ error: areasError.message }, { status: 500 });
+  }
+
+  const { error: documentosDeleteError } = await supabase
+    .from("documentos_postulacion")
+    .delete()
+    .eq("postulacion_id", postulacionId);
+
+  if (documentosDeleteError && !isMissingTableError(documentosDeleteError.message)) {
+    return NextResponse.json({ error: documentosDeleteError.message }, { status: 500 });
+  }
+
+  const { error: postulacionError } = await supabase.from("postulaciones").delete().eq("id", postulacionId);
+
+  if (postulacionError) {
+    return NextResponse.json({ error: postulacionError.message }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
