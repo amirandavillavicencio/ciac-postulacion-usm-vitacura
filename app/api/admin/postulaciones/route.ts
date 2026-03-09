@@ -23,6 +23,18 @@ function isDisponibleValue(value: unknown) {
   return false;
 }
 
+function toPostulacionIdKey(value: unknown) {
+  if (value === null || value === undefined) return null;
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue)) {
+    return String(numericValue);
+  }
+
+  const rawValue = String(value).trim();
+  return rawValue ? rawValue : null;
+}
+
 export async function GET() {
   const supabase = getSupabaseServerClient();
 
@@ -36,7 +48,9 @@ export async function GET() {
   }
 
   const postulanteIds = [...new Set((postulaciones ?? []).map((item) => item.postulante_id))].filter(Boolean);
-  const postulacionIds = (postulaciones ?? []).map((item) => item.id);
+  const postulacionIds = (postulaciones ?? [])
+    .map((item) => toPostulacionIdKey(item.id))
+    .filter((id): id is string => Boolean(id));
 
   const [
     { data: postulantes, error: postulantesError },
@@ -93,6 +107,9 @@ export async function GET() {
     areasMap.set(postulacionId, list);
   }
 
+  console.log("postulacionIds", postulacionIds);
+  console.log("disponibilidadRows", disponibilidad ?? []);
+
   const disponibilidadMap = new Map<string, { diaSemana: string; bloque: string }[]>();
   for (const item of disponibilidad ?? []) {
     if (!isDisponibleValue(item.disponible)) continue;
@@ -101,7 +118,9 @@ export async function GET() {
     const diaSemana = normalizeDiaSemanaValue(item.dia_semana);
     if (!bloque || !diaSemana) continue;
 
-    const postulacionId = String(item.postulacion_id);
+    const postulacionId = toPostulacionIdKey(item.postulacion_id);
+    if (!postulacionId) continue;
+
     const list = disponibilidadMap.get(postulacionId) ?? [];
     list.push({ diaSemana, bloque });
     list.sort((a, b) => sortBloques(a.bloque, b.bloque));
@@ -122,8 +141,8 @@ export async function GET() {
 
   const response = (postulaciones ?? []).map((item) => {
     const postulante = postulantesMap.get(item.postulante_id);
-    const postulacionId = String(item.id);
-    const areasData = areasMap.get(postulacionId) ?? [];
+    const postulacionId = toPostulacionIdKey(item.id);
+    const areasData = postulacionId ? areasMap.get(postulacionId) ?? [] : [];
 
     const areasConNota = areasData.filter((entry): entry is { area: string; notaAsignatura: number } =>
       typeof entry.notaAsignatura === "number"
@@ -158,8 +177,8 @@ export async function GET() {
           }
         : null,
       areas: areasData,
-      disponibilidad: disponibilidadMap.get(postulacionId) ?? [],
-      documentos: documentosMap.get(postulacionId) ?? [],
+      disponibilidad: postulacionId ? disponibilidadMap.get(postulacionId) ?? [] : [],
+      documentos: postulacionId ? documentosMap.get(postulacionId) ?? [] : [],
       rankingScore,
       rankingAreaLabel
     };
