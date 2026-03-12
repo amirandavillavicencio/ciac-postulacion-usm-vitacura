@@ -930,11 +930,11 @@ export default function AdminPostulacionesPage() {
 
 
         <section className="card p-5 md:p-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
             <div>
               <h2 className="section-title">Propuesta automática de horario</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Asigna 2 postulantes por bloque (lunes a viernes), priorizando diversidad de carrera y balance de carga.
+                Selección sugerida de 2 postulantes por bloque (lunes a viernes) con equilibrio por carrera y carga.
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 Paridad de género: {scheduleProposal.generoEnabled ? "activa (cuando hay dato de género)" : "no aplicada, no hay dato de género disponible"}.
@@ -943,52 +943,61 @@ export default function AdminPostulacionesPage() {
             <button
               type="button"
               onClick={handleExportScheduleCsv}
-              className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Exportar propuesta CSV
             </button>
-          </div>
+          </header>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="min-w-[920px] text-sm">
               <thead>
                 <tr className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-700">
-                  <th className="px-3 py-2">Bloque</th>
+                  <th className="px-3 py-2.5">Bloque</th>
                   {DIAS_SEMANA.map((day) => (
-                    <th key={`schedule-head-${day.value}`} className="px-3 py-2">{day.label}</th>
+                    <th key={`schedule-head-${day.value}`} className="px-3 py-2.5 text-left">
+                      {day.label}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {BLOQUES.filter((block) => block.value !== "almuerzo").map((block) => (
                   <tr key={`schedule-row-${block.value}`} className="border-t border-slate-200 align-top">
-                    <td className="px-3 py-2 font-medium text-slate-700">
-                      {block.label} <span className="text-slate-500">({block.rango})</span>
+                    <td className="px-3 py-3 font-medium text-slate-700">
+                      <p>{block.label}</p>
+                      <p className="text-xs font-normal text-slate-500">{block.rango}</p>
                     </td>
                     {DIAS_SEMANA.map((day) => {
                       const slot = scheduleProposal.matrix[day.value]?.[block.value];
 
                       if (!slot || slot.postulantes.length === 0) {
                         return (
-                          <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-2 text-slate-500">
-                            Sin cobertura
+                          <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-3 text-slate-500">
+                            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                              Sin cobertura
+                            </span>
                           </td>
                         );
                       }
 
                       if (slot.postulantes.length === 1) {
                         return (
-                          <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-2 text-amber-700">
-                            <p className="font-medium">{slot.postulantes[0].nombreCompleto}</p>
-                            <p className="text-xs">1 postulante disponible</p>
+                          <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-3">
+                            <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-2">
+                              <p className="font-medium text-amber-800">{slot.postulantes[0].nombreCompleto}</p>
+                              <p className="text-xs text-amber-700">1 postulante disponible</p>
+                            </div>
                           </td>
                         );
                       }
 
                       return (
-                        <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-2 text-slate-700">
-                          <p className="font-medium">{slot.postulantes[0].nombreCompleto}</p>
-                          <p className="font-medium">{slot.postulantes[1].nombreCompleto}</p>
+                        <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-3">
+                          <div className="space-y-1 rounded-lg border border-emerald-200 bg-emerald-50/60 p-2">
+                            <p className="font-medium text-slate-800">{slot.postulantes[0].nombreCompleto}</p>
+                            <p className="font-medium text-slate-800">{slot.postulantes[1].nombreCompleto}</p>
+                          </div>
                         </td>
                       );
                     })}
@@ -998,6 +1007,7 @@ export default function AdminPostulacionesPage() {
             </table>
           </div>
         </section>
+
 
         <section className="hidden print:block">
           <h2 className="mb-3 border-b border-slate-300 pb-1.5 text-2xl font-bold text-ciac-navy">Reporte general de postulantes</h2>
