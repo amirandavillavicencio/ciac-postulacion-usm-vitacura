@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { BLOQUES, DIAS_SEMANA } from "@/lib/constants/form";
+import { buildSchedule, buildScheduleCsv } from "@/lib/scheduling/buildSchedule";
 import { createXlsxBuffer, sanitizeSheetName, type ExcelCell, type ExcelSheet } from "@/lib/utils/xlsx";
 
 type AreaInfo = {
@@ -25,6 +26,7 @@ type DocumentoInfo = {
 
 type PostulacionAdmin = {
   id: number;
+  postulanteId: number | null;
   tipoPostulacion: "academico" | "administrativo" | string;
   motivacion: string;
   estado: string;
@@ -36,6 +38,7 @@ type PostulacionAdmin = {
     telefono: string;
     carrera: string;
     semestre: number;
+    genero?: string | null;
   } | null;
   areas: AreaInfo[];
   disponibilidad: DisponibilidadInfo[];
@@ -175,6 +178,38 @@ export default function AdminPostulacionesPage() {
     if (item.areas.length === 0) return "-";
     if (item.areas.length === 1) return formatArea(item.areas[0].area);
     return "Promedio simple";
+  }
+
+
+
+  const scheduleProposal = useMemo(() => {
+    const candidates = postulaciones
+      .filter((item) => item.postulante)
+      .map((item) => ({
+        id: item.postulanteId ?? item.id,
+        nombreCompleto: item.postulante?.nombreCompleto ?? "-",
+        rut: item.postulante?.rut ?? "-",
+        carrera: item.postulante?.carrera ?? null,
+        genero: item.postulante?.genero ?? null,
+        tipoPostulacion: item.tipoPostulacion,
+        area: item.areas[0]?.area ?? null,
+        disponibilidad: item.disponibilidad
+      }));
+
+    return buildSchedule(candidates);
+  }, [postulaciones]);
+
+  function handleExportScheduleCsv() {
+    const csv = buildScheduleCsv(scheduleProposal);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = "propuesta_horario.csv";
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(href);
   }
 
   const analytics = useMemo(() => {
@@ -886,6 +921,77 @@ export default function AdminPostulacionesPage() {
                         {item.rankingScore > 0 ? item.rankingScore.toFixed(2) : "-"}
                       </span>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+
+        <section className="card p-5 md:p-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="section-title">Propuesta automática de horario</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Asigna 2 postulantes por bloque (lunes a viernes), priorizando diversidad de carrera y balance de carga.
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Paridad de género: {scheduleProposal.generoEnabled ? "activa (cuando hay dato de género)" : "no aplicada, no hay dato de género disponible"}.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportScheduleCsv}
+              className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+            >
+              Exportar propuesta CSV
+            </button>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="min-w-[920px] text-sm">
+              <thead>
+                <tr className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-700">
+                  <th className="px-3 py-2">Bloque</th>
+                  {DIAS_SEMANA.map((day) => (
+                    <th key={`schedule-head-${day.value}`} className="px-3 py-2">{day.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {BLOQUES.filter((block) => block.value !== "almuerzo").map((block) => (
+                  <tr key={`schedule-row-${block.value}`} className="border-t border-slate-200 align-top">
+                    <td className="px-3 py-2 font-medium text-slate-700">
+                      {block.label} <span className="text-slate-500">({block.rango})</span>
+                    </td>
+                    {DIAS_SEMANA.map((day) => {
+                      const slot = scheduleProposal.matrix[day.value]?.[block.value];
+
+                      if (!slot || slot.postulantes.length === 0) {
+                        return (
+                          <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-2 text-slate-500">
+                            Sin cobertura
+                          </td>
+                        );
+                      }
+
+                      if (slot.postulantes.length === 1) {
+                        return (
+                          <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-2 text-amber-700">
+                            <p className="font-medium">{slot.postulantes[0].nombreCompleto}</p>
+                            <p className="text-xs">1 postulante disponible</p>
+                          </td>
+                        );
+                      }
+
+                      return (
+                        <td key={`schedule-cell-${day.value}-${block.value}`} className="px-3 py-2 text-slate-700">
+                          <p className="font-medium">{slot.postulantes[0].nombreCompleto}</p>
+                          <p className="font-medium">{slot.postulantes[1].nombreCompleto}</p>
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
