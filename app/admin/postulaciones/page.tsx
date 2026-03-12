@@ -100,6 +100,7 @@ export default function AdminPostulacionesPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState<string>("");
   const [exporting, setExporting] = useState(false);
+  const [exportingSql, setExportingSql] = useState(false);
 
   useEffect(() => {
     async function fetchPostulaciones() {
@@ -426,6 +427,29 @@ export default function AdminPostulacionesPage() {
     setExporting(false);
   }
 
+  async function handleExportSql() {
+    setExportingSql(true);
+
+    const response = await fetch("/api/admin/export-sql", { cache: "no-store" });
+
+    if (!response.ok) {
+      setExportingSql(false);
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "postulantes_ciac_export.sql";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+
+    setExportingSql(false);
+  }
+
   function renderBars(data: Record<string, number>) {
     const entries = Object.entries(data);
     const max = Math.max(...entries.map((entry) => entry[1]), 1);
@@ -487,6 +511,14 @@ export default function AdminPostulacionesPage() {
                 className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {exporting ? "Exportando..." : "Exportar Excel (.xlsx)"}
+              </button>
+              <button
+                type="button"
+                onClick={handleExportSql}
+                disabled={exportingSql}
+                className="rounded-lg bg-ciac-blue px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {exportingSql ? "Generando SQL..." : "Exportar SQL"}
               </button>
             </div>
           </div>
