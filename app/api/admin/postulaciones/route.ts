@@ -170,7 +170,7 @@ export async function GET() {
     postulanteIds.length > 0
       ? supabase
           .from("postulantes")
-          .select("id,nombre_completo,rut,correo,telefono,carrera,semestre")
+          .select("*")
           .in("id", postulanteIds)
       : Promise.resolve(emptyResult),
 
@@ -303,6 +303,11 @@ export async function GET() {
             telefono: postulante.telefono,
             carrera: postulante.carrera,
             semestre: postulante.semestre,
+            genero:
+              (postulante as Record<string, unknown>).genero ??
+              (postulante as Record<string, unknown>).género ??
+              (postulante as Record<string, unknown>).sexo ??
+              null,
           }
         : null,
       areas: areasData,
