@@ -28,6 +28,14 @@ export type ScheduleResult = {
   generoEnabled: boolean;
 };
 
+export type ScheduleOptions = {
+  enforceGenderEquity?: boolean;
+  enforceCareerEquity?: boolean;
+  maxBlocksPerDay?: number;
+  maxHoursPerTutor?: number;
+  shuffle?: boolean;
+};
+
 const VALID_DAYS = DIAS_SEMANA.map((d) => d.value);
 const VALID_BLOCKS = BLOQUES.filter((b) => b.value !== "almuerzo").map((b) => b.value);
 
@@ -57,6 +65,45 @@ function scorePair(a: Candidate, b: Candidate, assignedCountByCandidateId: Recor
   score += 20 - (loadA + loadB) * 5;
 
   return { score, reason: "ok" };
+}
+
+function shuffleCandidates<T>(items: T[]) {
+  const next = [...items];
+  for (let i = next.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+}
+
+function scorePairWithOptions(
+  a: Candidate,
+  b: Candidate,
+  assignedCountByCandidateId: Record<number, number>,
+  generoEnabled: boolean,
+  enforceCareerEquity: boolean
+) {
+  let score = 0;
+
+  if (a.id === b.id) return Number.NEGATIVE_INFINITY;
+
+  if (enforceCareerEquity) {
+    const carreraA = normalize(a.carrera);
+    const carreraB = normalize(b.carrera);
+    if (carreraA && carreraB && carreraA !== carreraB) score += 50;
+  }
+
+  if (generoEnabled) {
+    const genderA = normalize(a.genero);
+    const genderB = normalize(b.genero);
+    if (genderA && genderB && genderA !== genderB) score += 40;
+  }
+
+  const loadA = assignedCountByCandidateId[a.id] ?? 0;
+  const loadB = assignedCountByCandidateId[b.id] ?? 0;
+  score += 20 - (loadA + loadB) * 5;
+
+  return score;
 }
 
 export function buildSchedule(candidatesInput: Candidate[]): ScheduleResult {
@@ -127,6 +174,107 @@ export function buildSchedule(candidatesInput: Candidate[]): ScheduleResult {
         assignedByDay.get(day)?.add(candidate.id);
         assignedCountByCandidateId[candidate.id] = (assignedCountByCandidateId[candidate.id] ?? 0) + 1;
       }
+    }
+  }
+
+  return {
+    matrix,
+    assignedCountByCandidateId,
+    generoEnabled
+  };
+}
+
+export function buildScheduleWithOptions(candidatesInput: Candidate[], options: ScheduleOptions = {}): ScheduleResult {
+  const candidates = candidatesInput.filter((candidate) => candidate.tipoPostulacion !== "administrativo");
+  const matrix: ScheduleResult["matrix"] = {};
+  const assignedCountByCandidateId: Record<number, number> = {};
+  const assignedByDay = new Map<string, Set<number>>();
+  const dayLoadCounter = new Map<string, number>();
+
+  const maxBlocksPerDay = options.maxBlocksPerDay && options.maxBlocksPerDay > 0 ? options.maxBlocksPerDay : Infinity;
+  const maxHoursPerTutor = options.maxHoursPerTutor && options.maxHoursPerTutor > 0 ? options.maxHoursPerTutor : Infinity;
+  const enforceCareerEquity = options.enforceCareerEquity ?? true;
+  const generoEnabled = Boolean(options.enforceGenderEquity) && candidates.some((candidate) => Boolean(normalize(candidate.genero)));
+
+  for (const day of VALID_DAYS) {
+    matrix[day] = {};
+    assignedByDay.set(day, new Set<number>());
+    dayLoadCounter.set(day, 0);
+
+    for (const block of VALID_BLOCKS) {
+      const currentDayLoad = dayLoadCounter.get(day) ?? 0;
+      if (currentDayLoad >= maxBlocksPerDay) {
+        matrix[day][block] = { postulantes: [], score: -1, reason: "Límite diario configurado" };
+        continue;
+      }
+
+      const candidatesInSlotBase = candidates.filter((candidate) => {
+        const dayAssigned = assignedByDay.get(day);
+        if (dayAssigned?.has(candidate.id)) return false;
+        const candidateLoad = assignedCountByCandidateId[candidate.id] ?? 0;
+        if (candidateLoad >= maxHoursPerTutor) return false;
+
+        return candidate.disponibilidad.some((slot) => slot.diaSemana === day && slot.bloque === block);
+      });
+
+      const candidatesInSlot = options.shuffle ? shuffleCandidates(candidatesInSlotBase) : candidatesInSlotBase;
+
+      if (candidatesInSlot.length === 0) {
+        matrix[day][block] = { postulantes: [], score: -1, reason: "Sin cobertura" };
+        continue;
+      }
+
+      if (candidatesInSlot.length === 1) {
+        const uniqueCandidate = candidatesInSlot[0];
+        matrix[day][block] = {
+          postulantes: [uniqueCandidate],
+          score: 0,
+          reason: "1 postulante disponible"
+        };
+        assignedByDay.get(day)?.add(uniqueCandidate.id);
+        assignedCountByCandidateId[uniqueCandidate.id] = (assignedCountByCandidateId[uniqueCandidate.id] ?? 0) + 1;
+        dayLoadCounter.set(day, currentDayLoad + 1);
+        continue;
+      }
+
+      let bestScore = Number.NEGATIVE_INFINITY;
+      let bestPair: [Candidate, Candidate] | null = null;
+
+      for (let i = 0; i < candidatesInSlot.length; i += 1) {
+        for (let j = i + 1; j < candidatesInSlot.length; j += 1) {
+          const first = candidatesInSlot[i];
+          const second = candidatesInSlot[j];
+
+          const candidateScore = scorePairWithOptions(
+            first,
+            second,
+            assignedCountByCandidateId,
+            generoEnabled,
+            enforceCareerEquity
+          );
+          if (candidateScore > bestScore) {
+            bestScore = candidateScore;
+            bestPair = [first, second];
+          }
+        }
+      }
+
+      if (!bestPair) {
+        matrix[day][block] = { postulantes: [], score: -1, reason: "Sin cobertura" };
+        continue;
+      }
+
+      matrix[day][block] = {
+        postulantes: bestPair,
+        score: bestScore,
+        reason: "2 postulantes asignados"
+      };
+
+      for (const candidate of bestPair) {
+        assignedByDay.get(day)?.add(candidate.id);
+        assignedCountByCandidateId[candidate.id] = (assignedCountByCandidateId[candidate.id] ?? 0) + 1;
+      }
+      dayLoadCounter.set(day, currentDayLoad + 1);
     }
   }
 
