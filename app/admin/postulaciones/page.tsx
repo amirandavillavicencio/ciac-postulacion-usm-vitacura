@@ -538,6 +538,14 @@ export default function AdminPostulacionesPage() {
               >
                 Generar informe cobertura admin
               </Link>
+              <Link
+                href="/admin/postulantes/planificador"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Abrir planificador avanzado
+              </Link>
               <button
                 type="button"
                 onClick={handleExportExcel}
